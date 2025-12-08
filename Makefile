@@ -94,13 +94,62 @@ mock: ### run mockgen
 	mockgen -source ./internal/usecase/contracts.go -package usecase_test > ./internal/usecase/mocks_usecase_test.go
 .PHONY: mock
 
-migrate-create:  ### create new migration
+# ==============================================================================
+# Database Migrations
+# ==============================================================================
+
+migrate-create: ### create new migration (usage: make migrate-create name)
 	migrate create -ext sql -dir migrations '$(word 2,$(MAKECMDGOALS))'
 .PHONY: migrate-create
 
-migrate-up: ### migration up
+migrate-up: ### apply all pending migrations
 	migrate -path migrations -database '$(PG_URL)?sslmode=disable' up
 .PHONY: migrate-up
+
+migrate-down: ### rollback last migration
+	migrate -path migrations -database '$(PG_URL)?sslmode=disable' down 1
+.PHONY: migrate-down
+
+migrate-down-all: ### rollback all migrations (DANGEROUS)
+	@echo "WARNING: This will rollback ALL migrations!"
+	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	migrate -path migrations -database '$(PG_URL)?sslmode=disable' down -all
+.PHONY: migrate-down-all
+
+migrate-status: ### show current migration version
+	@migrate -path migrations -database '$(PG_URL)?sslmode=disable' version
+.PHONY: migrate-status
+
+migrate-force: ### force set migration version (usage: make migrate-force version=XX)
+	@test -n "$(version)" || (echo "ERROR: version is required. Usage: make migrate-force version=20210221023242" && exit 1)
+	migrate -path migrations -database '$(PG_URL)?sslmode=disable' force $(version)
+.PHONY: migrate-force
+
+migrate-validate: ### validate migrations can be applied
+	@echo "Validating migrations..."
+	@migrate -path migrations -database '$(PG_URL)?sslmode=disable' up && \
+		migrate -path migrations -database '$(PG_URL)?sslmode=disable' down -all && \
+		migrate -path migrations -database '$(PG_URL)?sslmode=disable' up && \
+		echo "Migrations validated successfully."
+.PHONY: migrate-validate
+
+seed-dev: ### load development seed data
+	@echo "Loading development seed data..."
+	@for f in seeds/development/*.sql; do \
+		echo "  Applying $$f..."; \
+		psql '$(PG_URL)?sslmode=disable' -f "$$f"; \
+	done
+	@echo "Development seed data loaded."
+.PHONY: seed-dev
+
+seed-test: ### load test fixtures
+	@echo "Loading test fixtures..."
+	@for f in seeds/test/*.sql; do \
+		echo "  Applying $$f..."; \
+		psql '$(PG_URL)?sslmode=disable' -f "$$f"; \
+	done
+	@echo "Test fixtures loaded."
+.PHONY: seed-test
 
 bin-deps: ### install tools
 	go install tool

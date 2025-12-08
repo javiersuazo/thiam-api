@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -15,11 +16,16 @@ import (
 )
 
 const (
-	_defaultAttempts = 20
-	_defaultTimeout  = time.Second
+	_defaultAttempts    = 20
+	_defaultIntervalSec = 1
 )
 
 func init() {
+	if enabled := os.Getenv("MIGRATION_ENABLED"); enabled == "false" {
+		log.Printf("Migrate: disabled via MIGRATION_ENABLED=false")
+		return
+	}
+
 	databaseURL, ok := os.LookupEnv("PG_URL")
 	if !ok || len(databaseURL) == 0 {
 		log.Fatalf("migrate: environment variable not declared: PG_URL")
@@ -27,10 +33,13 @@ func init() {
 
 	databaseURL += "?sslmode=disable"
 
+	attempts := getEnvInt("MIGRATION_RETRY_ATTEMPTS", _defaultAttempts)
+	intervalSec := getEnvInt("MIGRATION_RETRY_INTERVAL_SEC", _defaultIntervalSec)
+	interval := time.Duration(intervalSec) * time.Second
+
 	var (
-		attempts = _defaultAttempts
-		err      error
-		m        *migrate.Migrate
+		err error
+		m   *migrate.Migrate
 	)
 
 	for attempts > 0 {
@@ -40,7 +49,7 @@ func init() {
 		}
 
 		log.Printf("Migrate: postgres is trying to connect, attempts left: %d", attempts)
-		time.Sleep(_defaultTimeout)
+		time.Sleep(interval)
 		attempts--
 	}
 
@@ -50,6 +59,7 @@ func init() {
 
 	err = m.Up()
 	defer m.Close()
+
 	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		log.Fatalf("Migrate: up error: %s", err)
 	}
@@ -59,5 +69,15 @@ func init() {
 		return
 	}
 
-	log.Printf("Migrate: up success")
+	version, dirty, _ := m.Version()
+	log.Printf("Migrate: up success (version: %d, dirty: %v)", version, dirty)
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		if intVal, err := strconv.Atoi(val); err == nil {
+			return intVal
+		}
+	}
+	return defaultVal
 }
