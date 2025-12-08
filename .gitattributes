@@ -1,0 +1,47 @@
+# Auto detect text files and perform LF normalization
+* text=auto eol=lf
+
+# Go files
+*.go text diff=golang
+
+# Documentation
+*.md text diff=markdown
+*.txt text
+LICENSE text
+
+# Config files
+*.json text
+*.yaml text
+*.yml text
+*.toml text
+*.env text
+
+# Scripts
+*.sh text eol=lf
+Makefile text eol=lf
+
+# Docker
+Dockerfile text
+docker-compose*.yml text
+
+# SQL
+*.sql text
+
+# Proto
+*.proto text
+
+# Generated files - treat as binary
+*.pb.go binary linguist-generated=true
+
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg text
+
+# Archives
+*.zip binary
+*.tar binary
+*.gz binary

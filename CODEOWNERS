@@ -1,0 +1,17 @@
+# Default owners for everything in the repo
+* @javiersuazo
+
+# Infrastructure and CI/CD
+/.github/ @javiersuazo
+/docker-compose*.yml @javiersuazo
+/Dockerfile @javiersuazo
+/nginx/ @javiersuazo
+
+# Core application code
+/internal/ @javiersuazo
+/cmd/ @javiersuazo
+/pkg/ @javiersuazo
+
+# Configuration
+/config/ @javiersuazo
+/migrations/ @javiersuazo
