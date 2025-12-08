@@ -32,6 +32,7 @@ x-backend-app-environment: &x-backend-app-environment
   RMQ_RPC_SERVER: "rpc_server"
   RMQ_RPC_CLIENT: "rpc_client"
   RMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
+  RMQ_EVENT_EXCHANGE: "domain.events"
   # NATS
   NATS_RPC_SERVER: "rpc_server"
   NATS_URL: "nats://guest:guest@nats:4222/"
@@ -39,6 +40,11 @@ x-backend-app-environment: &x-backend-app-environment
   METRICS_ENABLED: "true"
   # Swagger
   SWAGGER_ENABLED: "true"
+  # Outbox (event publishing)
+  OUTBOX_ENABLED: "true"
+  OUTBOX_POLL_INTERVAL_MS: "1000"
+  OUTBOX_BATCH_SIZE: "100"
+  OUTBOX_MAX_RETRIES: "5"
 
 
 services:
@@ -51,6 +57,11 @@ services:
       - db_data:/var/lib/postgresql/data
     ports:
       - "5432:5432"
+    healthcheck:
+      test: pg_isready -U user -d db
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       app_network:
         aliases:
@@ -66,6 +77,11 @@ services:
       - "5672:5672"
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       app_network:
         aliases:
@@ -97,8 +113,10 @@ services:
       - "8080:8080"
       - "8081:8081"
     depends_on:
-      - db
-      - rabbitmq
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     deploy:
       resources:
         limits:
