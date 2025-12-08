@@ -40,9 +40,9 @@ func WithBatchSize(size int) WorkerOption {
 	}
 }
 
-func WithMaxRetries(max int) WorkerOption {
+func WithMaxRetries(maxRetries int) WorkerOption {
 	return func(w *Worker) {
-		w.maxRetries = max
+		w.maxRetries = maxRetries
 	}
 }
 
@@ -105,14 +105,17 @@ func (w *Worker) processOutbox(ctx context.Context) error {
 	for _, e := range events {
 		if e.RetryCount >= w.maxRetries {
 			w.logger.Warn(fmt.Sprintf("eventbus worker - max retries exceeded for event %s", e.ID))
+
 			continue
 		}
 
 		if err := w.publisher.Publish(ctx, e); err != nil {
 			w.logger.Error(err, fmt.Sprintf("eventbus worker - publish event %s", e.ID))
+
 			if markErr := w.outboxRepo.MarkFailed(ctx, e.ID, err); markErr != nil {
 				w.logger.Error(markErr, "eventbus worker - mark failed")
 			}
+
 			continue
 		}
 

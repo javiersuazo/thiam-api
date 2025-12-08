@@ -106,6 +106,8 @@ func (m *mockLogger) Error(_ interface{}, _ ...interface{}) {}
 func (m *mockLogger) Fatal(_ interface{}, _ ...interface{}) {}
 
 func TestWorker_ProcessesEvents(t *testing.T) {
+	t.Parallel()
+
 	repo := &mockOutboxRepo{
 		events: []event.OutboxEvent{
 			{
@@ -148,6 +150,8 @@ func TestWorker_ProcessesEvents(t *testing.T) {
 }
 
 func TestWorker_HandlesPublishError(t *testing.T) {
+	t.Parallel()
+
 	eventID := uuid.New()
 	repo := &mockOutboxRepo{
 		events: []event.OutboxEvent{
@@ -189,6 +193,8 @@ func TestWorker_HandlesPublishError(t *testing.T) {
 }
 
 func TestWorker_SkipsMaxRetries(t *testing.T) {
+	t.Parallel()
+
 	repo := &mockOutboxRepo{
 		events: []event.OutboxEvent{
 			{

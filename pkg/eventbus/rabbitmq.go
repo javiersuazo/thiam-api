@@ -29,6 +29,7 @@ func NewRabbitMQPublisher(url, exchange string) (*RabbitMQPublisher, error) {
 	ch, err := conn.Channel()
 	if err != nil {
 		conn.Close()
+
 		return nil, fmt.Errorf("RabbitMQPublisher - channel: %w", err)
 	}
 
@@ -44,6 +45,7 @@ func NewRabbitMQPublisher(url, exchange string) (*RabbitMQPublisher, error) {
 	if err != nil {
 		ch.Close()
 		conn.Close()
+
 		return nil, fmt.Errorf("RabbitMQPublisher - declare exchange: %w", err)
 	}
 
@@ -79,5 +81,6 @@ func (p *RabbitMQPublisher) Close() error {
 	if err := p.conn.Close(); err != nil {
 		return fmt.Errorf("RabbitMQPublisher - close connection: %w", err)
 	}
+
 	return nil
 }

@@ -63,12 +63,15 @@ func (r *OutboxRepo) FetchUnpublished(ctx context.Context, limit int) ([]event.O
 	defer rows.Close()
 
 	events := make([]event.OutboxEvent, 0, limit)
+
 	for rows.Next() {
 		var e event.OutboxEvent
+
 		err := rows.Scan(&e.ID, &e.AggregateType, &e.AggregateID, &e.EventType, &e.Payload, &e.CreatedAt, &e.RetryCount, &e.LastError)
 		if err != nil {
 			return nil, fmt.Errorf("OutboxRepo.FetchUnpublished - scan: %w", err)
 		}
+
 		events = append(events, e)
 	}
 
@@ -99,6 +102,7 @@ func (r *OutboxRepo) MarkPublished(ctx context.Context, id uuid.UUID) error {
 
 func (r *OutboxRepo) MarkFailed(ctx context.Context, id uuid.UUID, publishErr error) error {
 	errMsg := publishErr.Error()
+
 	sql, args, err := r.Builder.
 		Update("outbox_events").
 		Set("retry_count", "retry_count + 1").
