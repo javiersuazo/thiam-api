@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const dbHealthTimeout = 5 * time.Second
+
 type healthRoutes struct {
 	pool *pgxpool.Pool
 }
@@ -27,7 +29,7 @@ func NewHealthRoutes(app *fiber.App, pool *pgxpool.Pool) {
 }
 
 func (r *healthRoutes) dbHealth(c *fiber.Ctx) error {
-	ctx, cancel := context.WithTimeout(c.Context(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(c.Context(), dbHealthTimeout)
 	defer cancel()
 
 	if err := r.pool.Ping(ctx); err != nil {
@@ -37,8 +39,10 @@ func (r *healthRoutes) dbHealth(c *fiber.Ctx) error {
 		})
 	}
 
-	var version int64
-	var dirty bool
+	var (
+		version int64
+		dirty   bool
+	)
 
 	err := r.pool.QueryRow(ctx, "SELECT version, dirty FROM schema_migrations LIMIT 1").Scan(&version, &dirty)
 	if err != nil {

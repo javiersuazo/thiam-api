@@ -1,4 +1,4 @@
-// Package http implements routing paths. Each services in own file.
+// Package v1 implements routing paths. Each services in own file.
 package http
 
 import (
