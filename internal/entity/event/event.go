@@ -33,11 +33,11 @@ func NewBase(eventType, aggregateType, aggregateID string) Base {
 	}
 }
 
-func (b Base) EventID() uuid.UUID     { return b.ID }
-func (b Base) EventType() string      { return b.Type }
-func (b Base) AggregateID() string    { return b.AggrID }
-func (b Base) AggregateType() string  { return b.AggrType }
-func (b Base) OccurredAt() time.Time  { return b.Timestamp }
+func (b *Base) EventID() uuid.UUID    { return b.ID }
+func (b *Base) EventType() string     { return b.Type }
+func (b *Base) AggregateID() string   { return b.AggrID }
+func (b *Base) AggregateType() string { return b.AggrType }
+func (b *Base) OccurredAt() time.Time { return b.Timestamp }
 
 type Aggregate interface {
 	Events() []Event

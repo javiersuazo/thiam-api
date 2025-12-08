@@ -16,11 +16,13 @@ type TestEvent struct {
 	Email  string    `json:"email"`
 }
 
-func (e TestEvent) Payload() any {
+func (e *TestEvent) Payload() any {
 	return e
 }
 
 func TestNewBase(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
 		name          string
 		eventType     string
@@ -43,6 +45,8 @@ func TestNewBase(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			before := time.Now().UTC()
 			base := event.NewBase(tt.eventType, tt.aggregateType, tt.aggregateID)
 			after := time.Now().UTC()
@@ -58,15 +62,19 @@ func TestNewBase(t *testing.T) {
 }
 
 func TestRaisesEvents(t *testing.T) {
+	t.Parallel()
+
 	t.Run("raise and get events", func(t *testing.T) {
+		t.Parallel()
+
 		var r event.RaisesEvents
 
-		e1 := TestEvent{
+		e1 := &TestEvent{
 			Base:   event.NewBase("user.created", "user", "1"),
 			UserID: uuid.New(),
 			Email:  "test@example.com",
 		}
-		e2 := TestEvent{
+		e2 := &TestEvent{
 			Base:   event.NewBase("user.updated", "user", "1"),
 			UserID: uuid.New(),
 			Email:  "updated@example.com",
@@ -82,9 +90,11 @@ func TestRaisesEvents(t *testing.T) {
 	})
 
 	t.Run("clear events", func(t *testing.T) {
+		t.Parallel()
+
 		var r event.RaisesEvents
 
-		r.Raise(TestEvent{
+		r.Raise(&TestEvent{
 			Base: event.NewBase("user.created", "user", "1"),
 		})
 
@@ -95,13 +105,17 @@ func TestRaisesEvents(t *testing.T) {
 	})
 
 	t.Run("empty events", func(t *testing.T) {
+		t.Parallel()
+
 		var r event.RaisesEvents
 		assert.Empty(t, r.Events())
 	})
 }
 
 func TestNewOutboxEvent(t *testing.T) {
-	e := TestEvent{
+	t.Parallel()
+
+	e := &TestEvent{
 		Base:   event.NewBase("user.created", "user", "123"),
 		UserID: uuid.New(),
 		Email:  "test@example.com",

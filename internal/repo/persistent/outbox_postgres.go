@@ -27,8 +27,8 @@ func (r *OutboxRepo) Store(ctx context.Context, events []event.OutboxEvent) erro
 		Insert("outbox_events").
 		Columns("id", "aggregate_type", "aggregate_id", "event_type", "payload", "created_at")
 
-	for _, e := range events {
-		query = query.Values(e.ID, e.AggregateType, e.AggregateID, e.EventType, e.Payload, e.CreatedAt)
+	for i := range events {
+		query = query.Values(events[i].ID, events[i].AggregateType, events[i].AggregateID, events[i].EventType, events[i].Payload, events[i].CreatedAt)
 	}
 
 	sql, args, err := query.ToSql()
@@ -45,12 +45,16 @@ func (r *OutboxRepo) Store(ctx context.Context, events []event.OutboxEvent) erro
 }
 
 func (r *OutboxRepo) FetchUnpublished(ctx context.Context, limit int) ([]event.OutboxEvent, error) {
+	if limit < 0 {
+		limit = 0
+	}
+
 	sql, args, err := r.Builder.
 		Select("id", "aggregate_type", "aggregate_id", "event_type", "payload", "created_at", "retry_count", "last_error").
 		From("outbox_events").
 		Where("published_at IS NULL").
 		OrderBy("created_at ASC").
-		Limit(uint64(limit)).
+		Limit(uint64(limit)). //nolint:gosec // limit is checked above
 		ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("OutboxRepo.FetchUnpublished - build query: %w", err)

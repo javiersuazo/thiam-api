@@ -56,7 +56,7 @@ func NewRabbitMQPublisher(url, exchange string) (*RabbitMQPublisher, error) {
 	}, nil
 }
 
-func (p *RabbitMQPublisher) Publish(ctx context.Context, e event.OutboxEvent) error {
+func (p *RabbitMQPublisher) Publish(ctx context.Context, e *event.OutboxEvent) error {
 	return p.channel.PublishWithContext(
 		ctx,
 		p.exchange,
@@ -78,6 +78,7 @@ func (p *RabbitMQPublisher) Close() error {
 	if err := p.channel.Close(); err != nil {
 		return fmt.Errorf("RabbitMQPublisher - close channel: %w", err)
 	}
+
 	if err := p.conn.Close(); err != nil {
 		return fmt.Errorf("RabbitMQPublisher - close connection: %w", err)
 	}

@@ -67,6 +67,7 @@ func NewWorker(outboxRepo repo.OutboxRepo, publisher Publisher, l logger.Interfa
 
 func (w *Worker) Start(ctx context.Context) {
 	go w.run(ctx)
+
 	w.logger.Info("eventbus worker - started")
 }
 
@@ -102,25 +103,25 @@ func (w *Worker) processOutbox(ctx context.Context) error {
 		return fmt.Errorf("fetch unpublished: %w", err)
 	}
 
-	for _, e := range events {
-		if e.RetryCount >= w.maxRetries {
-			w.logger.Warn(fmt.Sprintf("eventbus worker - max retries exceeded for event %s", e.ID))
+	for i := range events {
+		if events[i].RetryCount >= w.maxRetries {
+			w.logger.Warn(fmt.Sprintf("eventbus worker - max retries exceeded for event %s", events[i].ID))
 
 			continue
 		}
 
-		if err := w.publisher.Publish(ctx, e); err != nil {
-			w.logger.Error(err, fmt.Sprintf("eventbus worker - publish event %s", e.ID))
+		if err := w.publisher.Publish(ctx, &events[i]); err != nil {
+			w.logger.Error(err, fmt.Sprintf("eventbus worker - publish event %s", events[i].ID))
 
-			if markErr := w.outboxRepo.MarkFailed(ctx, e.ID, err); markErr != nil {
+			if markErr := w.outboxRepo.MarkFailed(ctx, events[i].ID, err); markErr != nil {
 				w.logger.Error(markErr, "eventbus worker - mark failed")
 			}
 
 			continue
 		}
 
-		if err := w.outboxRepo.MarkPublished(ctx, e.ID); err != nil {
-			w.logger.Error(err, fmt.Sprintf("eventbus worker - mark published %s", e.ID))
+		if err := w.outboxRepo.MarkPublished(ctx, events[i].ID); err != nil {
+			w.logger.Error(err, fmt.Sprintf("eventbus worker - mark published %s", events[i].ID))
 		}
 	}
 

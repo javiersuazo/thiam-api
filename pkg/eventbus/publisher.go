@@ -7,6 +7,6 @@ import (
 )
 
 type Publisher interface {
-	Publish(ctx context.Context, e event.OutboxEvent) error
+	Publish(ctx context.Context, e *event.OutboxEvent) error
 	Close() error
 }

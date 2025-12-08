@@ -48,6 +48,7 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 
 	// Outbox Worker
 	var outboxWorker *eventbus.Worker
+
 	if cfg.Outbox.Enabled {
 		publisher, err := eventbus.NewRabbitMQPublisher(cfg.RMQ.URL, cfg.RMQ.EventExchange)
 		if err != nil {
@@ -97,6 +98,7 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 	// Start outbox worker
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+
 	if outboxWorker != nil {
 		outboxWorker.Start(ctx)
 	}
