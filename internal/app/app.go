@@ -2,10 +2,12 @@
 package app
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/evrone/go-clean-template/config"
 	amqprpc "github.com/evrone/go-clean-template/internal/controller/amqp_rpc"
@@ -15,6 +17,7 @@ import (
 	"github.com/evrone/go-clean-template/internal/repo/persistent"
 	"github.com/evrone/go-clean-template/internal/repo/webapi"
 	"github.com/evrone/go-clean-template/internal/usecase/translation"
+	"github.com/evrone/go-clean-template/pkg/eventbus"
 	"github.com/evrone/go-clean-template/pkg/grpcserver"
 	"github.com/evrone/go-clean-template/pkg/httpserver"
 	"github.com/evrone/go-clean-template/pkg/logger"
@@ -34,11 +37,32 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 	}
 	defer pg.Close()
 
+	// Repositories
+	outboxRepo := persistent.NewOutboxRepo(pg)
+
 	// Use-Case
 	translationUseCase := translation.New(
 		persistent.New(pg),
 		webapi.New(),
 	)
+
+	// Outbox Worker
+	var outboxWorker *eventbus.Worker
+	if cfg.Outbox.Enabled {
+		publisher, err := eventbus.NewRabbitMQPublisher(cfg.RMQ.URL, cfg.RMQ.EventExchange)
+		if err != nil {
+			l.Fatal(fmt.Errorf("app - Run - eventbus.NewRabbitMQPublisher: %w", err))
+		}
+
+		outboxWorker = eventbus.NewWorker(
+			outboxRepo,
+			publisher,
+			l,
+			eventbus.WithPollInterval(time.Duration(cfg.Outbox.PollInterval)*time.Millisecond),
+			eventbus.WithBatchSize(cfg.Outbox.BatchSize),
+			eventbus.WithMaxRetries(cfg.Outbox.MaxRetries),
+		)
+	}
 
 	// RabbitMQ RPC Server
 	rmqRouter := amqprpc.NewRouter(translationUseCase, l)
@@ -69,6 +93,13 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 	natsServer.Start()
 	grpcServer.Start()
 	httpServer.Start()
+
+	// Start outbox worker
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if outboxWorker != nil {
+		outboxWorker.Start(ctx)
+	}
 
 	// Waiting signal
 	interrupt := make(chan os.Signal, 1)
@@ -106,5 +137,10 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 	err = natsServer.Shutdown()
 	if err != nil {
 		l.Error(fmt.Errorf("app - Run - natsServer.Shutdown: %w", err))
+	}
+
+	// Stop outbox worker
+	if outboxWorker != nil {
+		outboxWorker.Stop()
 	}
 }
