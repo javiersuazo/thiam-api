@@ -81,27 +81,27 @@ func TestTranslate(t *testing.T) { //nolint:tparallel // data races here
 		{
 			name: "empty result",
 			mock: func() {
-				webAPI.EXPECT().Translate(entity.Translation{}).Return(entity.Translation{}, nil)
-				repo.EXPECT().Store(context.Background(), entity.Translation{}).Return(nil)
+				webAPI.EXPECT().Translate(gomock.Any()).Return(&entity.Translation{}, nil)
+				repo.EXPECT().Store(context.Background(), gomock.Any()).Return(nil)
 			},
-			res: entity.Translation{},
+			res: &entity.Translation{},
 			err: nil,
 		},
 		{
 			name: "web API error",
 			mock: func() {
-				webAPI.EXPECT().Translate(entity.Translation{}).Return(entity.Translation{}, errInternalServErr)
+				webAPI.EXPECT().Translate(gomock.Any()).Return(nil, errInternalServErr)
 			},
-			res: entity.Translation{},
+			res: (*entity.Translation)(nil),
 			err: errInternalServErr,
 		},
 		{
 			name: "repo error",
 			mock: func() {
-				webAPI.EXPECT().Translate(entity.Translation{}).Return(entity.Translation{}, nil)
-				repo.EXPECT().Store(context.Background(), entity.Translation{}).Return(errInternalServErr)
+				webAPI.EXPECT().Translate(gomock.Any()).Return(&entity.Translation{}, nil)
+				repo.EXPECT().Store(context.Background(), gomock.Any()).Return(errInternalServErr)
 			},
-			res: entity.Translation{},
+			res: (*entity.Translation)(nil),
 			err: errInternalServErr,
 		},
 	}
@@ -112,7 +112,7 @@ func TestTranslate(t *testing.T) { //nolint:tparallel // data races here
 		t.Run(localTc.name, func(t *testing.T) {
 			localTc.mock()
 
-			res, err := translationUseCase.Translate(context.Background(), entity.Translation{})
+			res, err := translationUseCase.Translate(context.Background(), &entity.Translation{})
 
 			require.EqualValues(t, res, localTc.res)
 			require.ErrorIs(t, err, localTc.err)

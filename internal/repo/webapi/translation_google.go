@@ -25,12 +25,12 @@ func New() *TranslationWebAPI {
 }
 
 // Translate -.
-func (t *TranslationWebAPI) Translate(translation entity.Translation) (entity.Translation, error) {
+func (t *TranslationWebAPI) Translate(translation *entity.Translation) (*entity.Translation, error) {
 	trans := translator.New(t.conf)
 
 	result, err := trans.Translate(translation.Original, translation.Source, translation.Destination)
 	if err != nil {
-		return entity.Translation{}, fmt.Errorf("TranslationWebAPI - Translate - trans.Translate: %w", err)
+		return nil, fmt.Errorf("TranslationWebAPI - Translate - trans.Translate: %w", err)
 	}
 
 	translation.Translation = result.Text

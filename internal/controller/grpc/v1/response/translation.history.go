@@ -9,7 +9,8 @@ import (
 func NewTranslationHistory(translationHistory entity.TranslationHistory) *v1.GetHistoryResponse {
 	history := make([]*v1.TranslationHistory, len(translationHistory.History))
 
-	for i, h := range translationHistory.History {
+	for i := range translationHistory.History {
+		h := &translationHistory.History[i]
 		history[i] = &v1.TranslationHistory{
 			Source:      h.Source,
 			Destination: h.Destination,
