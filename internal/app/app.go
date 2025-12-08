@@ -15,8 +15,6 @@ import (
 	"github.com/evrone/go-clean-template/internal/controller/http"
 	natsrpc "github.com/evrone/go-clean-template/internal/controller/nats_rpc"
 	"github.com/evrone/go-clean-template/internal/repo/persistent"
-	"github.com/evrone/go-clean-template/internal/repo/webapi"
-	"github.com/evrone/go-clean-template/internal/usecase/translation"
 	"github.com/evrone/go-clean-template/pkg/eventbus"
 	"github.com/evrone/go-clean-template/pkg/grpcserver"
 	"github.com/evrone/go-clean-template/pkg/httpserver"
@@ -27,7 +25,7 @@ import (
 )
 
 // Run creates objects via constructors.
-func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintlint,gocognit
+func Run(cfg *config.Config) { //nolint: funlen,gocritic,nolintlint,gocognit,gocyclo,cyclop
 	l := logger.New(cfg.Log.Level)
 
 	// Repository
@@ -39,12 +37,6 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 
 	// Repositories
 	outboxRepo := persistent.NewOutboxRepo(pg)
-
-	// Use-Case
-	translationUseCase := translation.New(
-		persistent.New(pg),
-		webapi.New(),
-	)
 
 	// Outbox Worker
 	var (
@@ -71,7 +63,7 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 	}
 
 	// RabbitMQ RPC Server
-	rmqRouter := amqprpc.NewRouter(translationUseCase, l)
+	rmqRouter := amqprpc.NewRouter(l)
 
 	rmqServer, err := rmqRPCServer.New(cfg.RMQ.URL, cfg.RMQ.ServerExchange, rmqRouter, l)
 	if err != nil {
@@ -79,7 +71,7 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 	}
 
 	// NATS RPC Server
-	natsRouter := natsrpc.NewRouter(translationUseCase, l)
+	natsRouter := natsrpc.NewRouter(l)
 
 	natsServer, err := natsRPCServer.New(cfg.NATS.URL, cfg.NATS.ServerExchange, natsRouter, l)
 	if err != nil {
@@ -88,11 +80,11 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 
 	// gRPC Server
 	grpcServer := grpcserver.New(l, grpcserver.Port(cfg.GRPC.Port))
-	grpc.NewRouter(grpcServer.App, translationUseCase, l)
+	grpc.NewRouter(grpcServer.App, l)
 
 	// HTTP Server
 	httpServer := httpserver.New(l, httpserver.Port(cfg.HTTP.Port), httpserver.Prefork(cfg.HTTP.UsePreforkMode))
-	http.NewRouter(httpServer.App, cfg, pg, translationUseCase, l)
+	http.NewRouter(httpServer.App, cfg, pg, l)
 
 	// Start servers
 	rmqServer.Start()

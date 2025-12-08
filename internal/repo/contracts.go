@@ -4,7 +4,6 @@ package repo
 import (
 	"context"
 
-	"github.com/evrone/go-clean-template/internal/entity"
 	"github.com/evrone/go-clean-template/internal/entity/event"
 	"github.com/evrone/go-clean-template/internal/entity/notification"
 	"github.com/google/uuid"
@@ -13,17 +12,6 @@ import (
 //go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
 
 type (
-	// TranslationRepo -.
-	TranslationRepo interface {
-		Store(context.Context, *entity.Translation) error
-		GetHistory(context.Context) ([]entity.Translation, error)
-	}
-
-	// TranslationWebAPI -.
-	TranslationWebAPI interface {
-		Translate(*entity.Translation) (*entity.Translation, error)
-	}
-
 	// OutboxRepo handles outbox event persistence.
 	OutboxRepo interface {
 		Store(ctx context.Context, events []event.OutboxEvent) error

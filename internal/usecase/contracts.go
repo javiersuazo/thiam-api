@@ -4,7 +4,6 @@ package usecase
 import (
 	"context"
 
-	"github.com/evrone/go-clean-template/internal/entity"
 	"github.com/evrone/go-clean-template/internal/entity/notification"
 	"github.com/google/uuid"
 )
@@ -12,12 +11,6 @@ import (
 //go:generate mockgen -source=interfaces.go -destination=./mocks_usecase_test.go -package=usecase_test
 
 type (
-	// Translation -.
-	Translation interface {
-		Translate(context.Context, *entity.Translation) (*entity.Translation, error)
-		History(context.Context) (entity.TranslationHistory, error)
-	}
-
 	// InAppNotification handles in-app notification operations.
 	InAppNotification interface {
 		Create(ctx context.Context, n *notification.InAppNotification) error

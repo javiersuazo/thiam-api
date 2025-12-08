@@ -8,7 +8,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func errorResponse(ctx *fiber.Ctx, err error) error {
+// ErrorResponse handles error responses with proper status codes.
+func ErrorResponse(ctx *fiber.Ctx, err error) error {
 	appErr, ok := apperror.AsAppError(err)
 	if !ok {
 		return ctx.Status(http.StatusInternalServerError).JSON(response.Error{
@@ -17,7 +18,7 @@ func errorResponse(ctx *fiber.Ctx, err error) error {
 		})
 	}
 
-	status := kindToHTTPStatus(appErr.Kind())
+	status := KindToHTTPStatus(appErr.Kind())
 
 	return ctx.Status(status).JSON(response.Error{
 		Code:    appErr.Code(),
@@ -26,7 +27,8 @@ func errorResponse(ctx *fiber.Ctx, err error) error {
 	})
 }
 
-func kindToHTTPStatus(kind apperror.Kind) int {
+// KindToHTTPStatus maps error kinds to HTTP status codes.
+func KindToHTTPStatus(kind apperror.Kind) int {
 	switch kind {
 	case apperror.KindUnknown, apperror.KindInternal:
 		return http.StatusInternalServerError
@@ -49,6 +51,7 @@ func kindToHTTPStatus(kind apperror.Kind) int {
 	return http.StatusInternalServerError
 }
 
-func validationError(ctx *fiber.Ctx, msg string) error {
-	return errorResponse(ctx, apperror.Validation(msg))
+// ValidationError returns a validation error response.
+func ValidationError(ctx *fiber.Ctx, msg string) error {
+	return ErrorResponse(ctx, apperror.Validation(msg))
 }
