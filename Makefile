@@ -196,8 +196,8 @@ logs: ### tail application logs
 	@$(BASE_STACK) logs -f app
 .PHONY: logs
 
-test-watch: ### run tests in watch mode
-	@command -v watchexec >/dev/null 2>&1 || (echo "Installing watchexec..." && brew install watchexec)
+test-watch: ### run tests in watch mode (requires watchexec)
+	@command -v watchexec >/dev/null 2>&1 || (echo "ERROR: watchexec not found. Install with:" && echo "  brew install watchexec        # macOS" && echo "  cargo install watchexec-cli  # any platform with Rust" && exit 1)
 	watchexec -e go -r -- go test -v -race ./internal/...
 .PHONY: test-watch
 
@@ -210,6 +210,7 @@ env-check: ### validate required environment variables
 
 security: ### run security checks
 	@echo "Running security checks..."
-	@govulncheck ./...
+	@command -v govulncheck >/dev/null 2>&1 || (echo "Installing govulncheck..." && go install golang.org/x/vuln/cmd/govulncheck@latest)
+	@$$(go env GOPATH)/bin/govulncheck ./...
 	@echo "Security checks complete."
 .PHONY: security
