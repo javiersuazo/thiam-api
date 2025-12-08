@@ -128,7 +128,7 @@ setup: ### one-command dev environment setup
 
 dev: ### run app with hot-reload
 	@command -v air >/dev/null 2>&1 || (echo "Installing air..." && go install github.com/air-verse/air@latest)
-	air
+	@$$(go env GOPATH)/bin/air
 .PHONY: dev
 
 doctor: ### diagnose development environment
