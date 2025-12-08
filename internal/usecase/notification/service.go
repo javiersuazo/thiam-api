@@ -28,7 +28,7 @@ type ServiceDeps struct {
 	PushSender       notify.PushSender
 }
 
-func NewService(deps ServiceDeps) *Service {
+func NewService(deps *ServiceDeps) *Service {
 	return &Service{
 		notificationRepo: deps.NotificationRepo,
 		prefsRepo:        deps.PrefsRepo,
@@ -135,5 +135,6 @@ func (s *Service) logDelivery(ctx context.Context, notificationID, userID uuid.U
 		log.ErrorMessage = &errMsg
 	}
 
-	_ = s.deliveryLogRepo.Store(ctx, log)
+	//nolint:errcheck // fire and forget - delivery logging should not fail the main operation
+	s.deliveryLogRepo.Store(ctx, log)
 }

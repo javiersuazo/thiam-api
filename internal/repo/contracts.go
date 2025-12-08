@@ -36,7 +36,7 @@ type (
 	NotificationRepo interface {
 		Store(ctx context.Context, n *notification.InAppNotification) error
 		GetByID(ctx context.Context, id uuid.UUID) (*notification.InAppNotification, error)
-		GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]notification.InAppNotification, error)
+		GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset uint64) ([]notification.InAppNotification, error)
 		MarkAsRead(ctx context.Context, id uuid.UUID) error
 		MarkAllAsRead(ctx context.Context, userID uuid.UUID) error
 		GetUnreadCount(ctx context.Context, userID uuid.UUID) (int, error)

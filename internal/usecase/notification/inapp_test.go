@@ -17,7 +17,7 @@ var errRepo = errors.New("repository error")
 type mockNotificationRepo struct {
 	storeFunc          func(ctx context.Context, n *notification.InAppNotification) error
 	getByIDFunc        func(ctx context.Context, id uuid.UUID) (*notification.InAppNotification, error)
-	getByUserIDFunc    func(ctx context.Context, userID uuid.UUID, limit, offset int) ([]notification.InAppNotification, error)
+	getByUserIDFunc    func(ctx context.Context, userID uuid.UUID, limit, offset uint64) ([]notification.InAppNotification, error)
 	markAsReadFunc     func(ctx context.Context, id uuid.UUID) error
 	markAllAsReadFunc  func(ctx context.Context, userID uuid.UUID) error
 	getUnreadCountFunc func(ctx context.Context, userID uuid.UUID) (int, error)
@@ -39,7 +39,7 @@ func (m *mockNotificationRepo) GetByID(ctx context.Context, id uuid.UUID) (*noti
 	return nil, nil
 }
 
-func (m *mockNotificationRepo) GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]notification.InAppNotification, error) {
+func (m *mockNotificationRepo) GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset uint64) ([]notification.InAppNotification, error) {
 	if m.getByUserIDFunc != nil {
 		return m.getByUserIDFunc(ctx, userID, limit, offset)
 	}

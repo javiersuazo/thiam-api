@@ -74,14 +74,14 @@ func (r *NotificationRepo) GetByID(ctx context.Context, id uuid.UUID) (*notifica
 	return &n, nil
 }
 
-func (r *NotificationRepo) GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]notification.InAppNotification, error) {
+func (r *NotificationRepo) GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset uint64) ([]notification.InAppNotification, error) {
 	sql, args, err := r.Builder.
 		Select("id", "user_id", "type", "title", "body", "data", "action_url", "image_url", "read", "read_at", "created_at").
 		From("notifications").
 		Where("user_id = ?", userID).
 		OrderBy("created_at DESC").
-		Limit(uint64(limit)).
-		Offset(uint64(offset)).
+		Limit(limit).
+		Offset(offset).
 		ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("NotificationRepo - GetByUserID - r.Builder: %w", err)

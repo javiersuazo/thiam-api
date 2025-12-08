@@ -36,7 +36,7 @@ func (uc *InAppUseCase) GetByID(ctx context.Context, id uuid.UUID) (*notificatio
 	return n, nil
 }
 
-func (uc *InAppUseCase) GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset int) ([]notification.InAppNotification, error) {
+func (uc *InAppUseCase) GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset uint64) ([]notification.InAppNotification, error) {
 	notifications, err := uc.repo.GetByUserID(ctx, userID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("InAppUseCase - GetByUserID - uc.repo.GetByUserID: %w", err)

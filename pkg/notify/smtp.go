@@ -39,6 +39,16 @@ func (s *SMTPSender) Send(ctx context.Context, msg *notification.EmailMessage) e
 		auth = smtp.PlainAuth("", s.config.Username, s.config.Password, s.config.Host)
 	}
 
+	message := s.buildMessage(msg)
+
+	if s.config.UseTLS {
+		return s.sendWithTLS(ctx, addr, auth, msg.To, message)
+	}
+
+	return smtp.SendMail(addr, auth, s.config.From, msg.To, message)
+}
+
+func (s *SMTPSender) buildMessage(msg *notification.EmailMessage) []byte {
 	headers := make(map[string]string)
 	headers["From"] = s.config.From
 	headers["To"] = strings.Join(msg.To, ", ")
@@ -62,14 +72,24 @@ func (s *SMTPSender) Send(ctx context.Context, msg *notification.EmailMessage) e
 
 	message += "\r\n" + body
 
-	if s.config.UseTLS {
-		return s.sendWithTLS(ctx, addr, auth, msg.To, []byte(message))
-	}
-
-	return smtp.SendMail(addr, auth, s.config.From, msg.To, []byte(message))
+	return []byte(message)
 }
 
 func (s *SMTPSender) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, to []string, msg []byte) error {
+	client, err := s.dialTLS(ctx, addr)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	if authErr := s.authenticate(client, auth); authErr != nil {
+		return authErr
+	}
+
+	return s.sendMessage(client, to, msg)
+}
+
+func (s *SMTPSender) dialTLS(ctx context.Context, addr string) (*smtp.Client, error) {
 	tlsConfig := &tls.Config{
 		ServerName: s.config.Host,
 		MinVersion: tls.VersionTLS12,
@@ -82,28 +102,38 @@ func (s *SMTPSender) sendWithTLS(ctx context.Context, addr string, auth smtp.Aut
 
 	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return fmt.Errorf("tls dial: %w", err)
+		return nil, fmt.Errorf("tls dial: %w", err)
 	}
-	defer conn.Close()
 
 	client, err := smtp.NewClient(conn, s.config.Host)
 	if err != nil {
-		return fmt.Errorf("smtp client: %w", err)
-	}
-	defer client.Close()
+		conn.Close()
 
-	if auth != nil {
-		if err = client.Auth(auth); err != nil {
-			return fmt.Errorf("smtp auth: %w", err)
-		}
+		return nil, fmt.Errorf("smtp client: %w", err)
 	}
 
-	if err = client.Mail(s.config.From); err != nil {
+	return client, nil
+}
+
+func (s *SMTPSender) authenticate(client *smtp.Client, auth smtp.Auth) error {
+	if auth == nil {
+		return nil
+	}
+
+	if err := client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp auth: %w", err)
+	}
+
+	return nil
+}
+
+func (s *SMTPSender) sendMessage(client *smtp.Client, to []string, msg []byte) error {
+	if err := client.Mail(s.config.From); err != nil {
 		return fmt.Errorf("smtp mail: %w", err)
 	}
 
 	for _, rcpt := range to {
-		if err = client.Rcpt(rcpt); err != nil {
+		if err := client.Rcpt(rcpt); err != nil {
 			return fmt.Errorf("smtp rcpt: %w", err)
 		}
 	}
@@ -113,13 +143,11 @@ func (s *SMTPSender) sendWithTLS(ctx context.Context, addr string, auth smtp.Aut
 		return fmt.Errorf("smtp data: %w", err)
 	}
 
-	_, err = w.Write(msg)
-	if err != nil {
+	if _, err = w.Write(msg); err != nil {
 		return fmt.Errorf("smtp write: %w", err)
 	}
 
-	err = w.Close()
-	if err != nil {
+	if err = w.Close(); err != nil {
 		return fmt.Errorf("smtp close writer: %w", err)
 	}
 

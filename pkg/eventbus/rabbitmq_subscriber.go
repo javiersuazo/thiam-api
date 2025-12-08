@@ -113,6 +113,7 @@ func (s *RabbitMQSubscriber) Subscribe(ctx context.Context, topic string) (<-cha
 					Payload: msg.Body,
 				}
 
+				//nolint:errcheck // best effort ack - if it fails, message will be redelivered
 				msg.Ack(false)
 			}
 		}
