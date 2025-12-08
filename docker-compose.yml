@@ -25,7 +25,7 @@ x-backend-app-environment: &x-backend-app-environment
   LOG_LEVEL: "debug"
   # PG
   PG_POOL_MAX: "2"
-  PG_URL: "postgres://user:myAwEsOm3pa55@w0rd@db:5432/db"
+  PG_URL: "postgres://user:myAwEsOm3pa55@w0rd@db:5432/db?sslmode=disable"
   # gRPC
   GRPC_PORT: "8081"
   # RMQ

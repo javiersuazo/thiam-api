@@ -81,6 +81,139 @@ make migrate-create "add_users_table"
 make reset-db
 ```
 
+## Database Migrations
+
+We use [golang-migrate](https://github.com/golang-migrate/migrate) for database migrations.
+
+### Migration Commands
+
+| Command | Description |
+|---------|-------------|
+| `make migrate-up` | Apply all pending migrations |
+| `make migrate-down` | Rollback last migration |
+| `make migrate-down-all` | Rollback all migrations (requires confirmation) |
+| `make migrate-status` | Show current migration version |
+| `make migrate-create name` | Create new migration files |
+| `make migrate-force version=XX` | Force set migration version (for fixing dirty state) |
+| `make migrate-validate` | Test migrations up/down/up cycle |
+
+### Creating Migrations
+
+```bash
+# Create a new migration
+make migrate-create add_users_table
+
+# This creates two files:
+# migrations/20241208123456_add_users_table.up.sql
+# migrations/20241208123456_add_users_table.down.sql
+```
+
+### Migration File Structure
+
+```sql
+-- migrations/20241208123456_add_users_table.up.sql
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- migrations/20241208123456_add_users_table.down.sql
+DROP TABLE IF EXISTS users;
+```
+
+### Zero-Downtime Migration Patterns
+
+When deploying to production, follow these patterns to avoid downtime:
+
+**Safe Operations (can be done in single migration):**
+- `ADD COLUMN` (nullable, without default)
+- `CREATE INDEX CONCURRENTLY`
+- `ADD CONSTRAINT ... NOT VALID` followed by `VALIDATE CONSTRAINT`
+- `CREATE TABLE`
+
+**Unsafe Operations (require multi-step deployment):**
+
+| Operation | Safe Approach |
+|-----------|---------------|
+| Drop column | 1. Deploy code that doesn't use column 2. Then drop column |
+| Rename column | 1. Add new column 2. Migrate data 3. Deploy code using new column 4. Drop old column |
+| Add NOT NULL | 1. Add nullable column 2. Backfill data 3. Add NOT NULL constraint |
+| Change column type | 1. Add new column 2. Migrate data 3. Update code 4. Drop old column |
+
+**Example: Adding NOT NULL column safely**
+
+```sql
+-- Step 1: Add nullable column (migration 1)
+ALTER TABLE users ADD COLUMN name VARCHAR(255);
+
+-- Step 2: Backfill data (migration 2 or script)
+UPDATE users SET name = 'Unknown' WHERE name IS NULL;
+
+-- Step 3: Add NOT NULL constraint (migration 3)
+ALTER TABLE users ALTER COLUMN name SET NOT NULL;
+```
+
+### Rollback Procedures
+
+1. **Check current version:**
+   ```bash
+   make migrate-status
+   ```
+
+2. **Rollback one migration:**
+   ```bash
+   make migrate-down
+   ```
+
+3. **If migration is dirty (failed mid-way):**
+   ```bash
+   # Check the schema_migrations table
+   psql $PG_URL -c "SELECT * FROM schema_migrations;"
+
+   # Force to last known good version
+   make migrate-force version=20241208123456
+   ```
+
+### Seed Data
+
+```bash
+# Load development sample data
+make seed-dev
+
+# Load test fixtures
+make seed-test
+```
+
+Seed files are located in `seeds/development/` and `seeds/test/`.
+
+### Health Check Endpoint
+
+The `/healthz/db` endpoint returns the current migration status:
+
+```bash
+curl http://localhost:8080/healthz/db
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "migration_version": 20210221023242,
+  "dirty": false
+}
+```
+
+### Configuration
+
+Migration behavior can be configured via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MIGRATION_ENABLED` | `true` | Enable/disable auto-migration on startup |
+| `MIGRATION_RETRY_ATTEMPTS` | `20` | Number of DB connection retry attempts |
+| `MIGRATION_RETRY_INTERVAL_SEC` | `1` | Seconds between retry attempts |
+
 ### Code Generation
 
 ```bash
