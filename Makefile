@@ -109,3 +109,93 @@ bin-deps: ### install tools
 
 pre-commit: swag-v1 proto-v1 mock format linter-golangci test ### run pre-commit
 .PHONY: pre-commit
+
+# ==============================================================================
+# Developer Experience
+# ==============================================================================
+
+setup: ### one-command dev environment setup
+	@echo "Installing Go tools..."
+	@go install tool
+	@go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate
+	@go install github.com/air-verse/air@latest
+	@echo "Installing pre-commit hooks..."
+	@command -v pre-commit >/dev/null 2>&1 && pre-commit install || echo "pre-commit not found. Install with: brew install pre-commit"
+	@echo "Copying environment file..."
+	@test -f .env || cp .env.example .env
+	@echo "Setup complete! Run 'make dev' to start developing."
+.PHONY: setup
+
+dev: ### run app with hot-reload
+	@command -v air >/dev/null 2>&1 || (echo "Installing air..." && go install github.com/air-verse/air@latest)
+	air
+.PHONY: dev
+
+doctor: ### diagnose development environment
+	@echo "Checking development environment..."
+	@echo ""
+	@echo "Go:"
+	@go version || echo "  ERROR: Go not found"
+	@echo ""
+	@echo "Docker:"
+	@docker --version || echo "  ERROR: Docker not found"
+	@docker compose version || echo "  ERROR: Docker Compose not found"
+	@echo ""
+	@echo "Go Tools:"
+	@command -v golangci-lint >/dev/null 2>&1 && echo "  golangci-lint: OK" || echo "  golangci-lint: MISSING (run: make bin-deps)"
+	@command -v air >/dev/null 2>&1 && echo "  air: OK" || echo "  air: MISSING (run: go install github.com/air-verse/air@latest)"
+	@command -v swag >/dev/null 2>&1 && echo "  swag: OK" || echo "  swag: MISSING (run: make bin-deps)"
+	@command -v mockgen >/dev/null 2>&1 && echo "  mockgen: OK" || echo "  mockgen: MISSING (run: make bin-deps)"
+	@command -v migrate >/dev/null 2>&1 && echo "  migrate: OK" || echo "  migrate: MISSING (run: make bin-deps)"
+	@command -v protoc >/dev/null 2>&1 && echo "  protoc: OK" || echo "  protoc: MISSING (install protobuf compiler)"
+	@echo ""
+	@echo "Optional Tools:"
+	@command -v pre-commit >/dev/null 2>&1 && echo "  pre-commit: OK" || echo "  pre-commit: MISSING (run: brew install pre-commit)"
+	@command -v direnv >/dev/null 2>&1 && echo "  direnv: OK" || echo "  direnv: MISSING (run: brew install direnv)"
+	@echo ""
+	@echo "Environment:"
+	@test -f .env && echo "  .env file: OK" || echo "  .env file: MISSING (run: cp .env.example .env)"
+.PHONY: doctor
+
+clean: ### clean generated files and caches
+	@echo "Cleaning generated files..."
+	@rm -rf tmp/
+	@rm -rf coverage.txt
+	@rm -rf build-errors.log
+	@go clean -cache -testcache
+	@echo "Clean complete."
+.PHONY: clean
+
+reset-db: ### reset database to clean state
+	@echo "Stopping containers..."
+	@$(BASE_STACK) down db -v 2>/dev/null || true
+	@echo "Starting fresh database..."
+	@$(BASE_STACK) up -d db
+	@echo "Waiting for database to be ready..."
+	@sleep 3
+	@echo "Running migrations..."
+	@$(MAKE) migrate-up
+	@echo "Database reset complete."
+.PHONY: reset-db
+
+logs: ### tail application logs
+	@$(BASE_STACK) logs -f app
+.PHONY: logs
+
+test-watch: ### run tests in watch mode
+	@command -v watchexec >/dev/null 2>&1 || (echo "Installing watchexec..." && brew install watchexec)
+	watchexec -e go -r -- go test -v -race ./internal/...
+.PHONY: test-watch
+
+env-check: ### validate required environment variables
+	@echo "Checking required environment variables..."
+	@test -n "$$PG_URL" || (echo "ERROR: PG_URL is not set" && exit 1)
+	@test -n "$$HTTP_PORT" || (echo "ERROR: HTTP_PORT is not set" && exit 1)
+	@echo "All required environment variables are set."
+.PHONY: env-check
+
+security: ### run security checks
+	@echo "Running security checks..."
+	@govulncheck ./...
+	@echo "Security checks complete."
+.PHONY: security

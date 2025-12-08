@@ -1,6 +1,12 @@
 # IDE
 .idea
-.vscode
+
+# Allow VS Code workspace settings but ignore personal preferences
+!.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
 # Config
 .env
