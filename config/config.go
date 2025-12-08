@@ -9,16 +9,15 @@ import (
 type (
 	// Config -.
 	Config struct {
-		App       App
-		HTTP      HTTP
-		Log       Log
-		PG        PG
-		GRPC      GRPC
-		RMQ       RMQ
-		NATS      NATS
-		Metrics   Metrics
-		Swagger   Swagger
-		Migration Migration
+		App     App
+		HTTP    HTTP
+		Log     Log
+		PG      PG
+		GRPC    GRPC
+		RMQ     RMQ
+		NATS    NATS
+		Metrics Metrics
+		Swagger Swagger
 	}
 
 	// App -.
@@ -70,13 +69,6 @@ type (
 	// Swagger -.
 	Swagger struct {
 		Enabled bool `env:"SWAGGER_ENABLED" envDefault:"false"`
-	}
-
-	// Migration -.
-	Migration struct {
-		Enabled          bool `env:"MIGRATION_ENABLED" envDefault:"true"`
-		RetryAttempts    int  `env:"MIGRATION_RETRY_ATTEMPTS" envDefault:"20"`
-		RetryIntervalSec int  `env:"MIGRATION_RETRY_INTERVAL_SEC" envDefault:"1"`
 	}
 )
 

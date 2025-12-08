@@ -31,8 +31,6 @@ func init() {
 		log.Fatalf("migrate: environment variable not declared: PG_URL")
 	}
 
-	databaseURL += "?sslmode=disable"
-
 	attempts := getEnvInt("MIGRATION_RETRY_ATTEMPTS", _defaultAttempts)
 	intervalSec := getEnvInt("MIGRATION_RETRY_INTERVAL_SEC", _defaultIntervalSec)
 	interval := time.Duration(intervalSec) * time.Second

@@ -48,7 +48,6 @@ func (r *healthRoutes) dbHealth(c *fiber.Ctx) error {
 	if err != nil {
 		return c.Status(http.StatusOK).JSON(DBHealthResponse{
 			Status: "healthy",
-			Error:  "no migrations applied yet",
 		})
 	}
 
