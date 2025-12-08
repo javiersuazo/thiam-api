@@ -12,13 +12,25 @@ Fixes #(issue number)
 - [ ] Refactoring (no functional changes)
 
 ## Checklist
+
+### General
 - [ ] I have read the [CONTRIBUTING](CONTRIBUTING.md) guidelines
-- [ ] My code follows the project's style guidelines
 - [ ] I have performed a self-review of my code
-- [ ] I have added tests that prove my fix/feature works
 - [ ] New and existing tests pass locally (`make test`)
 - [ ] I have run the linter (`make linter-golangci`)
-- [ ] I have updated documentation if needed
+
+### Code Quality ([Coding Rules](docs/CODING_RULES.md))
+- [ ] Errors are wrapped with context using `fmt.Errorf("StructName.Method: %w", err)`
+- [ ] Domain errors use sentinel errors (`errors.Is()` for checking)
+- [ ] Interfaces are small and defined where they're used
+- [ ] Context is passed as first parameter to all functions
+- [ ] No sensitive data in logs or error messages
+- [ ] Tests are table-driven where applicable
+
+### Architecture ([Architecture](docs/ARCHITECTURE.md))
+- [ ] Changes respect layer boundaries (dependencies point inward)
+- [ ] Business logic is in use cases, not controllers
+- [ ] New features follow existing patterns
 
 ## Test Plan
 Describe how you tested these changes.
