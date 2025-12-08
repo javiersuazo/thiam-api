@@ -126,10 +126,24 @@ setup: ### one-command dev environment setup
 	@echo "Setup complete! Run 'make dev' to start developing."
 .PHONY: setup
 
-dev: ### run app with hot-reload
+dev: ### run app with hot-reload (start infra with: make dev-up)
 	@command -v air >/dev/null 2>&1 || (echo "Installing air..." && go install github.com/air-verse/air@latest)
 	@$$(go env GOPATH)/bin/air
 .PHONY: dev
+
+dev-up: ### start infrastructure + app with hot-reload
+	@echo "Starting infrastructure..."
+	@$(BASE_STACK) up -d db rabbitmq nats
+	@echo "Waiting for services to be ready..."
+	@sleep 3
+	@echo "Starting app with hot-reload..."
+	@command -v air >/dev/null 2>&1 || (echo "Installing air..." && go install github.com/air-verse/air@latest)
+	@$$(go env GOPATH)/bin/air
+.PHONY: dev-up
+
+dev-down: ### stop all development services
+	@$(BASE_STACK) down
+.PHONY: dev-down
 
 doctor: ### diagnose development environment
 	@echo "Checking development environment..."
