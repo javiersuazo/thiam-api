@@ -120,8 +120,11 @@ func (w *Worker) processOutbox(ctx context.Context) error {
 			continue
 		}
 
+		// NOTE: If MarkPublished fails after successful publish, the event will be re-published
+		// on the next polling cycle. Consumers MUST be idempotent and handle duplicate messages.
 		if err := w.outboxRepo.MarkPublished(ctx, events[i].ID); err != nil {
 			w.logger.Error(err, fmt.Sprintf("eventbus worker - mark published %s", events[i].ID))
+			w.logger.Warn(fmt.Sprintf("eventbus worker - possible duplicate delivery for event %s", events[i].ID))
 		}
 	}
 

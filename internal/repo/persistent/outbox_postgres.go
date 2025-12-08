@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/evrone/go-clean-template/internal/entity/event"
 	"github.com/evrone/go-clean-template/pkg/postgres"
 	"github.com/google/uuid"
@@ -109,7 +110,7 @@ func (r *OutboxRepo) MarkFailed(ctx context.Context, id uuid.UUID, publishErr er
 
 	sql, args, err := r.Builder.
 		Update("outbox_events").
-		Set("retry_count", "retry_count + 1").
+		Set("retry_count", sq.Expr("retry_count + 1")).
 		Set("last_error", errMsg).
 		Where("id = ?", id).
 		ToSql()

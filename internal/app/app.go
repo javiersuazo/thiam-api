@@ -27,7 +27,7 @@ import (
 )
 
 // Run creates objects via constructors.
-func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintlint
+func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintlint,gocognit
 	l := logger.New(cfg.Log.Level)
 
 	// Repository
@@ -47,13 +47,18 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 	)
 
 	// Outbox Worker
-	var outboxWorker *eventbus.Worker
+	var (
+		outboxWorker   *eventbus.Worker
+		eventPublisher eventbus.Publisher
+	)
 
 	if cfg.Outbox.Enabled {
 		publisher, err := eventbus.NewRabbitMQPublisher(cfg.RMQ.URL, cfg.RMQ.EventExchange)
 		if err != nil {
 			l.Fatal(fmt.Errorf("app - Run - eventbus.NewRabbitMQPublisher: %w", err))
 		}
+
+		eventPublisher = publisher
 
 		outboxWorker = eventbus.NewWorker(
 			outboxRepo,
@@ -141,8 +146,14 @@ func Run(cfg *config.Config) { //nolint: gocyclo,cyclop,funlen,gocritic,nolintli
 		l.Error(fmt.Errorf("app - Run - natsServer.Shutdown: %w", err))
 	}
 
-	// Stop outbox worker
+	// Stop outbox worker and close publisher
 	if outboxWorker != nil {
 		outboxWorker.Stop()
+	}
+
+	if eventPublisher != nil {
+		if err := eventPublisher.Close(); err != nil {
+			l.Error(fmt.Errorf("app - Run - eventPublisher.Close: %w", err))
+		}
 	}
 }

@@ -24,6 +24,8 @@ type mockOutboxRepo struct {
 	markFailedErr error
 	published     []uuid.UUID
 	failed        []uuid.UUID
+	onPublished   chan uuid.UUID
+	onFailed      chan uuid.UUID
 }
 
 func (m *mockOutboxRepo) Store(_ context.Context, events []event.OutboxEvent) error {
@@ -68,6 +70,13 @@ func (m *mockOutboxRepo) MarkPublished(_ context.Context, id uuid.UUID) error {
 		}
 	}
 
+	if m.onPublished != nil {
+		select {
+		case m.onPublished <- id:
+		default:
+		}
+	}
+
 	return nil
 }
 
@@ -86,6 +95,13 @@ func (m *mockOutboxRepo) MarkFailed(_ context.Context, id uuid.UUID, _ error) er
 			m.events[i].RetryCount++
 
 			break
+		}
+	}
+
+	if m.onFailed != nil {
+		select {
+		case m.onFailed <- id:
+		default:
 		}
 	}
 
@@ -126,10 +142,13 @@ func (m *mockLogger) Fatal(_ interface{}, _ ...interface{}) {}
 func TestWorker_ProcessesEvents(t *testing.T) {
 	t.Parallel()
 
+	onPublished := make(chan uuid.UUID, 1)
+	eventID := uuid.New()
+
 	repo := &mockOutboxRepo{
 		events: []event.OutboxEvent{
 			{
-				ID:            uuid.New(),
+				ID:            eventID,
 				AggregateType: "user",
 				AggregateID:   "1",
 				EventType:     "user.created",
@@ -137,6 +156,7 @@ func TestWorker_ProcessesEvents(t *testing.T) {
 				CreatedAt:     time.Now(),
 			},
 		},
+		onPublished: onPublished,
 	}
 	publisher := &mockPublisher{}
 	logger := &mockLogger{}
@@ -145,14 +165,18 @@ func TestWorker_ProcessesEvents(t *testing.T) {
 		repo,
 		publisher,
 		logger,
-		eventbus.WithPollInterval(50*time.Millisecond),
+		eventbus.WithPollInterval(10*time.Millisecond),
 		eventbus.WithBatchSize(10),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	worker.Start(ctx)
 
-	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-onPublished:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for event to be published")
+	}
 
 	cancel()
 	worker.Stop()
@@ -172,7 +196,9 @@ func TestWorker_ProcessesEvents(t *testing.T) {
 func TestWorker_HandlesPublishError(t *testing.T) {
 	t.Parallel()
 
+	onFailed := make(chan uuid.UUID, 1)
 	eventID := uuid.New()
+
 	repo := &mockOutboxRepo{
 		events: []event.OutboxEvent{
 			{
@@ -184,6 +210,7 @@ func TestWorker_HandlesPublishError(t *testing.T) {
 				CreatedAt:     time.Now(),
 			},
 		},
+		onFailed: onFailed,
 	}
 	publisher := &mockPublisher{
 		publishErr: errConnectionFailed,
@@ -194,13 +221,17 @@ func TestWorker_HandlesPublishError(t *testing.T) {
 		repo,
 		publisher,
 		logger,
-		eventbus.WithPollInterval(50*time.Millisecond),
+		eventbus.WithPollInterval(10*time.Millisecond),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	worker.Start(ctx)
 
-	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-onFailed:
+	case <-time.After(time.Second):
+		t.Fatal("timeout waiting for event to be marked failed")
+	}
 
 	cancel()
 	worker.Stop()
@@ -236,14 +267,15 @@ func TestWorker_SkipsMaxRetries(t *testing.T) {
 		repo,
 		publisher,
 		logger,
-		eventbus.WithPollInterval(50*time.Millisecond),
+		eventbus.WithPollInterval(10*time.Millisecond),
 		eventbus.WithMaxRetries(5),
 	)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	worker.Start(ctx)
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for at least one poll cycle
+	time.Sleep(50 * time.Millisecond)
 
 	cancel()
 	worker.Stop()
