@@ -15,6 +15,7 @@ type (
 		PG      PG
 		GRPC    GRPC
 		RMQ     RMQ
+		Outbox  Outbox
 		NATS    NATS
 		Metrics Metrics
 		Swagger Swagger
@@ -53,6 +54,15 @@ type (
 		ServerExchange string `env:"RMQ_RPC_SERVER,required"`
 		ClientExchange string `env:"RMQ_RPC_CLIENT,required"`
 		URL            string `env:"RMQ_URL,required"`
+		EventExchange  string `env:"RMQ_EVENT_EXCHANGE" envDefault:"domain.events"`
+	}
+
+	// Outbox -.
+	Outbox struct {
+		Enabled      bool `env:"OUTBOX_ENABLED" envDefault:"true"`
+		PollInterval int  `env:"OUTBOX_POLL_INTERVAL_MS" envDefault:"1000"`
+		BatchSize    int  `env:"OUTBOX_BATCH_SIZE" envDefault:"100"`
+		MaxRetries   int  `env:"OUTBOX_MAX_RETRIES" envDefault:"5"`
 	}
 
 	// NATS -.
