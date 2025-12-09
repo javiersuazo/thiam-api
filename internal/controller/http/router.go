@@ -23,7 +23,7 @@ import (
 // @host        localhost:8080
 // @BasePath    /v1
 func NewRouter(app *fiber.App, cfg *config.Config, pg *postgres.Postgres, l logger.Interface) {
-	// Options
+	app.Use(middleware.RequestID())
 	app.Use(middleware.Logger(l))
 	app.Use(middleware.Recovery(l))
 
