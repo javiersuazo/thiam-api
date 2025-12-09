@@ -242,6 +242,257 @@ paths:
           $ref: "#/components/responses/Unauthorized"
 
   # =============================================================================
+  # AUTH - Magic Link (Passwordless Login)
+  # =============================================================================
+
+  /v1/auth/magic-link/send:
+    post:
+      tags:
+        - Auth
+      summary: Send magic link
+      description: |
+        Send a passwordless login link via email or SMS.
+        User clicks the link or enters the OTP to authenticate.
+      operationId: sendMagicLink
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMagicLinkRequest"
+      responses:
+        "202":
+          description: Magic link sent if account exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MagicLinkSentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/magic-link/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify magic link
+      description: |
+        Authenticate using magic link token (from email link) or OTP code (from SMS).
+        Returns auth tokens on success.
+      operationId: verifyMagicLink
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyMagicLinkRequest"
+      responses:
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired magic link/code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                expired:
+                  value:
+                    code: TOKEN_EXPIRED
+                    message: Magic link has expired
+                invalid:
+                  value:
+                    code: INVALID_TOKEN
+                    message: Invalid magic link or code
+        "403":
+          description: MFA required after magic link verification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginChallenge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/magic-link/resend:
+    post:
+      tags:
+        - Auth
+      summary: Resend magic link
+      description: Resend magic link/OTP for an existing magic link session
+      operationId: resendMagicLink
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendMagicLinkRequest"
+      responses:
+        "200":
+          description: Magic link resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MagicLinkSentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # =============================================================================
+  # AUTH - Security Audit Log
+  # =============================================================================
+
+  /v1/auth/security/events:
+    get:
+      tags:
+        - Auth
+      summary: Get security events
+      description: |
+        Returns security audit log for the authenticated user.
+        Includes login attempts, password changes, MFA changes, etc.
+      operationId: getSecurityEvents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: event_type
+          in: query
+          description: Filter by event type
+          schema:
+            $ref: "#/components/schemas/SecurityEventType"
+        - name: from
+          in: query
+          description: Filter events from this date
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Filter events until this date
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Security events list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityEventList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/security/events/{event_id}:
+    get:
+      tags:
+        - Auth
+      summary: Get security event details
+      description: Get detailed information about a specific security event
+      operationId: getSecurityEvent
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Security event details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # =============================================================================
+  # AUTH - Availability Checks
+  # =============================================================================
+
+  /v1/auth/check/email:
+    post:
+      tags:
+        - Auth
+      summary: Check email availability
+      description: |
+        Check if an email address is available for registration.
+        Use before registration to provide instant feedback.
+      operationId: checkEmailAvailability
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckEmailRequest"
+      responses:
+        "200":
+          description: Availability result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/check/phone:
+    post:
+      tags:
+        - Auth
+      summary: Check phone availability
+      description: |
+        Check if a phone number is available for registration.
+        Use before registration to provide instant feedback.
+      operationId: checkPhoneAvailability
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckPhoneRequest"
+      responses:
+        "200":
+          description: Availability result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # =============================================================================
   # AUTH - Social Login (OAuth)
   # =============================================================================
 
@@ -2520,6 +2771,267 @@ components:
         token:
           type: string
           description: Email verification token
+
+    # =========================================================================
+    # Auth - Magic Link Schemas
+    # =========================================================================
+
+    SendMagicLinkRequest:
+      type: object
+      required:
+        - identifier
+        - method
+      properties:
+        identifier:
+          type: string
+          description: Email address or phone number
+          example: user@example.com
+        method:
+          type: string
+          enum: [email, sms]
+          description: Delivery method for magic link
+          example: email
+
+    MagicLinkSentResponse:
+      type: object
+      required:
+        - message
+        - session_id
+        - expires_at
+      properties:
+        message:
+          type: string
+          example: Magic link sent to your email
+        session_id:
+          type: string
+          description: Session ID for verification/resend
+          example: ml_abc123...
+        masked_destination:
+          type: string
+          description: Masked email or phone where link was sent
+          example: j***n@example.com
+        expires_at:
+          type: string
+          format: date-time
+          description: When the magic link expires
+        method:
+          type: string
+          enum: [email, sms]
+          description: Method used to send magic link
+
+    VerifyMagicLinkRequest:
+      type: object
+      required:
+        - session_id
+      properties:
+        session_id:
+          type: string
+          description: Session ID from send response
+        token:
+          type: string
+          description: Token from magic link URL (for email)
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: OTP code (for SMS)
+          example: "123456"
+
+    ResendMagicLinkRequest:
+      type: object
+      required:
+        - session_id
+      properties:
+        session_id:
+          type: string
+          description: Session ID from original send response
+        method:
+          type: string
+          enum: [email, sms]
+          description: Optionally change delivery method
+
+    # =========================================================================
+    # Auth - Security Audit Log Schemas
+    # =========================================================================
+
+    SecurityEventType:
+      type: string
+      description: Type of security event
+      enum:
+        # Authentication events
+        - login_success
+        - login_failed
+        - logout
+        - magic_link_sent
+        - magic_link_used
+
+        # Password events
+        - password_changed
+        - password_reset_requested
+        - password_reset_completed
+
+        # MFA events
+        - mfa_enabled
+        - mfa_disabled
+        - mfa_challenge_success
+        - mfa_challenge_failed
+        - recovery_code_used
+        - recovery_codes_regenerated
+
+        # Passkey events
+        - passkey_registered
+        - passkey_removed
+        - passkey_used
+
+        # OAuth events
+        - oauth_linked
+        - oauth_unlinked
+        - oauth_login
+
+        # Account events
+        - email_changed
+        - phone_changed
+        - profile_updated
+        - account_locked
+        - account_unlocked
+        - account_deletion_requested
+        - account_deleted
+
+        # Session events
+        - session_revoked
+        - all_sessions_revoked
+
+        # Security events
+        - suspicious_activity
+        - new_device_login
+
+    SecurityEvent:
+      type: object
+      required:
+        - id
+        - event_type
+        - timestamp
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        event_type:
+          $ref: "#/components/schemas/SecurityEventType"
+        timestamp:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        ip_address:
+          type: string
+          example: 192.168.1.1
+        user_agent:
+          type: string
+          example: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+        location:
+          type: object
+          properties:
+            city:
+              type: string
+              example: San Francisco
+            region:
+              type: string
+              example: CA
+            country:
+              type: string
+              example: US
+            country_code:
+              type: string
+              example: US
+        device:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [desktop, mobile, tablet, unknown]
+            os:
+              type: string
+              example: macOS 14.0
+            browser:
+              type: string
+              example: Chrome 120
+        details:
+          type: object
+          additionalProperties: true
+          description: |
+            Additional event-specific details:
+            - login_failed: { "reason": "invalid_password", "attempts": 3 }
+            - mfa_enabled: { "method": "totp" }
+            - oauth_linked: { "provider": "google" }
+            - new_device_login: { "is_new_device": true }
+          example:
+            reason: invalid_password
+            attempts: 3
+        success:
+          type: boolean
+          description: Whether the action was successful
+          example: true
+        risk_level:
+          type: string
+          enum: [low, medium, high]
+          description: Risk assessment of the event
+          example: low
+
+    SecurityEventList:
+      type: object
+      required:
+        - events
+        - pagination
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityEvent"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # =========================================================================
+    # Auth - Availability Check Schemas
+    # =========================================================================
+
+    CheckEmailRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    CheckPhoneRequest:
+      type: object
+      required:
+        - phone_number
+      properties:
+        phone_number:
+          type: string
+          pattern: "^\\+[1-9]\\d{1,14}$"
+          description: E.164 format phone number
+          example: "+14155551234"
+
+    AvailabilityResponse:
+      type: object
+      required:
+        - available
+      properties:
+        available:
+          type: boolean
+          description: Whether the email/phone is available for registration
+          example: true
+        message:
+          type: string
+          description: Human-readable message
+          example: Email is available
+        suggestions:
+          type: array
+          items:
+            type: string
+          description: Alternative suggestions if not available (for usernames)
 
     # =========================================================================
     # Auth - Profile Management Schemas
