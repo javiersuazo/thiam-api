@@ -47,7 +47,12 @@ func New(url string, opts ...Option) (*Postgres, error) {
 		return nil, fmt.Errorf("postgres - NewPostgres - pgxpool.ParseConfig: %w", err)
 	}
 
-	poolConfig.MaxConns = int32(pg.maxPoolSize)
+	maxConns := int32(_defaultMaxPoolSize)
+	if pg.maxPoolSize > 0 && pg.maxPoolSize <= 1000 {
+		maxConns = int32(pg.maxPoolSize) // #nosec G115 -- maxPoolSize bounded to [1, 1000]
+	}
+
+	poolConfig.MaxConns = maxConns
 
 	for pg.connAttempts > 0 {
 		pg.Pool, err = pgxpool.NewWithConfig(context.Background(), poolConfig)

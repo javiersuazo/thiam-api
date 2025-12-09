@@ -11,17 +11,26 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=1000"]
 
-  - repo: https://github.com/dnephin/pre-commit-golang
-    rev: v0.5.1
+  - repo: local
     hooks:
       - id: go-fmt
-      - id: go-imports
+        name: go fmt
+        entry: go fmt ./...
+        types: [go]
+        language: system
+        pass_filenames: false
       - id: go-mod-tidy
-
-  - repo: https://github.com/golangci/golangci-lint
-    rev: v2.1.6
-    hooks:
+        name: go mod tidy
+        entry: go mod tidy
+        types: [go]
+        language: system
+        pass_filenames: false
       - id: golangci-lint
+        name: golangci-lint
+        entry: bash -c 'PATH="$PATH:$(go env GOPATH)/bin" golangci-lint run'
+        types: [go]
+        language: system
+        pass_filenames: false
 
   - repo: https://github.com/compilerla/conventional-pre-commit
     rev: v3.4.0
