@@ -1044,6 +1044,370 @@ paths:
         "429":
           $ref: "#/components/responses/TooManyRequests"
 
+  # =============================================================================
+  # AUTH - Profile Management (Authenticated)
+  # =============================================================================
+
+  /v1/auth/profile:
+    patch:
+      tags:
+        - Auth
+      summary: Update profile
+      description: Update user's profile information (name, avatar)
+      operationId: updateProfile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/email/change:
+    post:
+      tags:
+        - Auth
+      summary: Request email change
+      description: Initiate email change - sends verification to new email
+      operationId: requestEmailChange
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeEmailRequest"
+      responses:
+        "202":
+          description: Verification email sent to new address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/email/change/confirm:
+    post:
+      tags:
+        - Auth
+      summary: Confirm email change
+      description: Complete email change with verification token
+      operationId: confirmEmailChange
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmEmailChangeRequest"
+      responses:
+        "200":
+          description: Email changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/phone/change:
+    post:
+      tags:
+        - Auth
+      summary: Request phone change
+      description: Initiate phone number change - sends OTP to new number
+      operationId: requestPhoneChange
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePhoneRequest"
+      responses:
+        "200":
+          description: OTP sent to new phone number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Phone number already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/phone/change/confirm:
+    post:
+      tags:
+        - Auth
+      summary: Confirm phone change
+      description: Complete phone change with OTP verification
+      operationId: confirmPhoneChange
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPhoneChangeRequest"
+      responses:
+        "200":
+          description: Phone number changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/phone/remove:
+    post:
+      tags:
+        - Auth
+      summary: Remove phone number
+      description: Remove phone number from account (requires password confirmation)
+      operationId: removePhone
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPasswordRequest"
+      responses:
+        "200":
+          description: Phone number removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Cannot remove - phone required for SMS MFA
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # =============================================================================
+  # AUTH - Account Recovery (Unauthenticated)
+  # =============================================================================
+
+  /v1/auth/recovery/start:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Start account recovery
+      description: Initiate account recovery process via email or phone
+      operationId: startAccountRecovery
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartRecoveryRequest"
+      responses:
+        "202":
+          description: Recovery initiated if account exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryStartedResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/recovery/verify:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Verify recovery code
+      description: Verify OTP sent via email or SMS for account recovery
+      operationId: verifyRecoveryCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRecoveryRequest"
+      responses:
+        "200":
+          description: Code verified, returns recovery token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryVerifiedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/recovery/reset-mfa:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Reset MFA during recovery
+      description: Disable all MFA methods using recovery token (after verification)
+      operationId: resetMfaDuringRecovery
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetMfaRequest"
+      responses:
+        "200":
+          description: MFA reset, user can now login
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired recovery token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/recovery/resend:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Resend recovery code
+      description: Resend OTP for account recovery
+      operationId: resendRecoveryCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendRecoveryRequest"
+      responses:
+        "200":
+          description: Code resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # =============================================================================
+  # AUTH - Account Deletion
+  # =============================================================================
+
+  /v1/auth/account/delete:
+    post:
+      tags:
+        - Auth
+      summary: Request account deletion
+      description: Initiate account deletion - sends confirmation email
+      operationId: requestAccountDeletion
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPasswordRequest"
+      responses:
+        "202":
+          description: Deletion confirmation email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/account/delete/confirm:
+    post:
+      tags:
+        - Auth
+      summary: Confirm account deletion
+      description: Complete account deletion with confirmation token
+      operationId: confirmAccountDeletion
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmDeletionRequest"
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
 components:
   schemas:
     # =========================================================================
@@ -1932,6 +2296,204 @@ components:
         token:
           type: string
           description: Email verification token
+
+    # =========================================================================
+    # Auth - Profile Management Schemas
+    # =========================================================================
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: John Doe
+        avatar_url:
+          type: string
+          format: uri
+          example: https://example.com/avatar.jpg
+
+    ChangeEmailRequest:
+      type: object
+      required:
+        - new_email
+        - password
+      properties:
+        new_email:
+          type: string
+          format: email
+          example: newemail@example.com
+        password:
+          type: string
+          format: password
+          description: Current password for confirmation
+
+    ConfirmEmailChangeRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Email change verification token
+
+    ChangePhoneRequest:
+      type: object
+      required:
+        - new_phone_number
+        - password
+      properties:
+        new_phone_number:
+          type: string
+          pattern: "^\\+[1-9]\\d{1,14}$"
+          description: E.164 format phone number
+          example: "+14155551234"
+        password:
+          type: string
+          format: password
+          description: Current password for confirmation
+
+    ConfirmPhoneChangeRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: OTP sent to new phone number
+          example: "123456"
+
+    # =========================================================================
+    # Auth - Account Recovery Schemas
+    # =========================================================================
+
+    StartRecoveryRequest:
+      type: object
+      required:
+        - identifier
+        - method
+      properties:
+        identifier:
+          type: string
+          description: Email address or phone number
+          example: user@example.com
+        method:
+          type: string
+          enum: [email, sms]
+          description: Recovery method to use
+          example: email
+
+    RecoveryStartedResponse:
+      type: object
+      required:
+        - message
+        - recovery_session_id
+      properties:
+        message:
+          type: string
+          example: Recovery code sent if account exists
+        recovery_session_id:
+          type: string
+          description: Session ID for recovery flow
+          example: rec_abc123...
+        masked_destination:
+          type: string
+          description: Masked email or phone where code was sent
+          example: j***n@example.com
+        expires_at:
+          type: string
+          format: date-time
+          description: When the recovery session expires
+
+    VerifyRecoveryRequest:
+      type: object
+      required:
+        - recovery_session_id
+        - code
+      properties:
+        recovery_session_id:
+          type: string
+          description: Session ID from start recovery response
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: OTP code sent via email or SMS
+          example: "123456"
+
+    RecoveryVerifiedResponse:
+      type: object
+      required:
+        - recovery_token
+        - available_actions
+      properties:
+        recovery_token:
+          type: string
+          description: Token to perform recovery actions
+          example: rec_token_xyz...
+        available_actions:
+          type: array
+          items:
+            type: string
+            enum: [reset_password, reset_mfa, login]
+          description: Actions available with this recovery token
+          example: [reset_password, reset_mfa]
+        user_info:
+          type: object
+          properties:
+            email_masked:
+              type: string
+              example: j***n@example.com
+            mfa_enabled:
+              type: boolean
+              example: true
+            mfa_methods:
+              type: array
+              items:
+                type: string
+                enum: [totp, sms]
+              example: [totp]
+
+    ResetMfaRequest:
+      type: object
+      required:
+        - recovery_token
+      properties:
+        recovery_token:
+          type: string
+          description: Token from verified recovery
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+          description: Optional new password to set
+
+    ResendRecoveryRequest:
+      type: object
+      required:
+        - recovery_session_id
+      properties:
+        recovery_session_id:
+          type: string
+          description: Session ID from start recovery response
+
+    # =========================================================================
+    # Auth - Account Deletion Schemas
+    # =========================================================================
+
+    ConfirmDeletionRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Account deletion confirmation token
+        feedback:
+          type: string
+          maxLength: 1000
+          description: Optional feedback on why user is leaving
 
   parameters:
     PageParam:
