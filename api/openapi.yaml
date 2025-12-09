@@ -1,0 +1,329 @@
+openapi: 3.1.0
+info:
+  title: Thiam API
+  description: |
+    Thiam Platform API - Contract-First Design
+
+    ## Usage
+    This OpenAPI specification serves as the **source of truth** for API contracts.
+
+    ### For Backend
+    - Design endpoints here BEFORE implementation
+    - Implement handlers following this contract
+
+    ### For Frontend
+    - Generate TypeScript client: `npx openapi-typescript api/openapi.yaml -o types/api.ts`
+    - Run mock server: `./api/scripts/generate-client.sh --mock`
+  version: 1.0.0
+  contact:
+    name: Thiam Team
+
+servers:
+  - url: http://localhost:8080
+    description: Local development
+  - url: https://api.thiam.app
+    description: Production
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Auth
+    description: Authentication and authorization
+  - name: Users
+    description: User management
+
+paths:
+  /healthz:
+    get:
+      tags:
+        - Health
+      summary: Liveness probe
+      description: Returns 200 if the service is running
+      operationId: healthz
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
+
+  /readyz:
+    get:
+      tags:
+        - Health
+      summary: Readiness probe
+      description: Returns 200 if the service is ready to accept traffic
+      operationId: readyz
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: Service is not ready
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  # =============================================================================
+  # ADD NEW ENDPOINTS BELOW - Design before implementing
+  # =============================================================================
+  #
+  # Example: User endpoints (uncomment and modify when ready to implement)
+  #
+  # /v1/users:
+  #   get:
+  #     tags:
+  #       - Users
+  #     summary: List users
+  #     operationId: listUsers
+  #     parameters:
+  #       - $ref: "#/components/parameters/PageParam"
+  #       - $ref: "#/components/parameters/LimitParam"
+  #     responses:
+  #       "200":
+  #         description: List of users
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/UserList"
+  #       "401":
+  #         $ref: "#/components/responses/Unauthorized"
+  #
+  #   post:
+  #     tags:
+  #       - Users
+  #     summary: Create user
+  #     operationId: createUser
+  #     requestBody:
+  #       required: true
+  #       content:
+  #         application/json:
+  #           schema:
+  #             $ref: "#/components/schemas/CreateUserRequest"
+  #     responses:
+  #       "201":
+  #         description: User created
+  #         content:
+  #           application/json:
+  #             schema:
+  #               $ref: "#/components/schemas/User"
+  #       "400":
+  #         $ref: "#/components/responses/BadRequest"
+  #       "409":
+  #         $ref: "#/components/responses/Conflict"
+
+components:
+  schemas:
+    # =========================================================================
+    # Common Schemas
+    # =========================================================================
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          description: Human-readable error message
+          example: Invalid request parameters
+        details:
+          type: object
+          additionalProperties: true
+          description: Additional error details
+        request_id:
+          type: string
+          format: uuid
+          description: Request ID for tracing
+          example: 550e8400-e29b-41d4-a716-446655440000
+
+    HealthStatus:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [healthy, unhealthy]
+          example: healthy
+        checks:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              status:
+                type: string
+                enum: [up, down]
+              latency_ms:
+                type: integer
+          example:
+            postgres:
+              status: up
+              latency_ms: 5
+
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+          example: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 20
+        total:
+          type: integer
+          minimum: 0
+          example: 150
+        total_pages:
+          type: integer
+          minimum: 0
+          example: 8
+
+    # =========================================================================
+    # Domain Schemas - Add your domain models here
+    # =========================================================================
+
+    # Example User schema (uncomment when ready)
+    # User:
+    #   type: object
+    #   required:
+    #     - id
+    #     - email
+    #     - created_at
+    #   properties:
+    #     id:
+    #       type: string
+    #       format: uuid
+    #       example: 550e8400-e29b-41d4-a716-446655440000
+    #     email:
+    #       type: string
+    #       format: email
+    #       example: user@example.com
+    #     name:
+    #       type: string
+    #       example: John Doe
+    #     created_at:
+    #       type: string
+    #       format: date-time
+    #       example: 2024-01-15T10:30:00Z
+    #     updated_at:
+    #       type: string
+    #       format: date-time
+    #       example: 2024-01-15T10:30:00Z
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: Page number for pagination
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+
+    LimitParam:
+      name: limit
+      in: query
+      description: Number of items per page
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+
+    IDParam:
+      name: id
+      in: path
+      required: true
+      description: Resource ID
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    BadRequest:
+      description: Bad request - validation error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: VALIDATION_ERROR
+            message: Invalid request parameters
+            details:
+              email: must be a valid email address
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: UNAUTHORIZED
+            message: Authentication required
+
+    Forbidden:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: FORBIDDEN
+            message: Insufficient permissions
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: NOT_FOUND
+            message: Resource not found
+
+    Conflict:
+      description: Conflict - resource already exists
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: CONFLICT
+            message: Resource already exists
+
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: INTERNAL_ERROR
+            message: An unexpected error occurred
+            request_id: 550e8400-e29b-41d4-a716-446655440000
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token from authentication
+
+# Default security - uncomment when auth is implemented
+# security:
+#   - BearerAuth: []
