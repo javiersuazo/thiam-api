@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-//go:generate mockgen -source=contracts.go -destination=../usecase/mocks_repo_test.go -package=usecase_test
+//go:generate mockgen -source=contracts.go -destination=mocks/repo_mock.go -package=mocks
 
 type (
 	// OutboxRepo handles outbox event persistence.

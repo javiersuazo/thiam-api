@@ -115,9 +115,18 @@ func (s *Service) SendEmail(ctx context.Context, msg *notification.EmailMessage)
 		return nil
 	}
 
+	prefs, err := s.prefsRepo.Get(ctx, msg.UserID)
+	if err == nil && !prefs.EmailEnabled {
+		return nil
+	}
+
 	if err := s.emailSender.Send(ctx, msg); err != nil {
+		s.logDelivery(ctx, uuid.Nil, msg.UserID, notification.ChannelEmail, notification.StatusFailed, err.Error())
+
 		return fmt.Errorf("Service - SendEmail - s.emailSender.Send: %w", err)
 	}
+
+	s.logDelivery(ctx, uuid.Nil, msg.UserID, notification.ChannelEmail, notification.StatusSent, "")
 
 	return nil
 }

@@ -32,17 +32,17 @@ func (r *PushTokenRepo) Store(ctx context.Context, token *notification.PushToken
 	}
 
 	sql := `
-		INSERT INTO push_tokens (id, user_id, token, platform, device_id, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (token) DO UPDATE SET
-			user_id = EXCLUDED.user_id,
+		INSERT INTO push_tokens (id, user_id, token, platform, device_id, active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		ON CONFLICT (user_id, device_id) DO UPDATE SET
+			token = EXCLUDED.token,
 			platform = EXCLUDED.platform,
-			device_id = EXCLUDED.device_id,
+			active = EXCLUDED.active,
 			updated_at = EXCLUDED.updated_at
 	`
 
 	_, err := r.Pool.Exec(ctx, sql,
-		token.ID, token.UserID, token.Token, token.Platform, token.DeviceID, token.CreatedAt, token.UpdatedAt,
+		token.ID, token.UserID, token.Token, token.Platform, token.DeviceID, token.Active, token.CreatedAt, token.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("PushTokenRepo - Store - r.Pool.Exec: %w", err)
@@ -53,7 +53,7 @@ func (r *PushTokenRepo) Store(ctx context.Context, token *notification.PushToken
 
 func (r *PushTokenRepo) GetByUserID(ctx context.Context, userID uuid.UUID) ([]notification.PushToken, error) {
 	sql, args, err := r.Builder.
-		Select("id", "user_id", "token", "platform", "device_id", "created_at", "updated_at").
+		Select("id", "user_id", "token", "platform", "device_id", "active", "created_at", "updated_at").
 		From("push_tokens").
 		Where("user_id = ?", userID).
 		ToSql()
@@ -72,7 +72,7 @@ func (r *PushTokenRepo) GetByUserID(ctx context.Context, userID uuid.UUID) ([]no
 	for rows.Next() {
 		var t notification.PushToken
 
-		err = rows.Scan(&t.ID, &t.UserID, &t.Token, &t.Platform, &t.DeviceID, &t.CreatedAt, &t.UpdatedAt)
+		err = rows.Scan(&t.ID, &t.UserID, &t.Token, &t.Platform, &t.DeviceID, &t.Active, &t.CreatedAt, &t.UpdatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("PushTokenRepo - GetByUserID - rows.Scan: %w", err)
 		}

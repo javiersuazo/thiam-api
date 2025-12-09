@@ -3,6 +3,7 @@ package notification
 import "github.com/google/uuid"
 
 type EmailMessage struct {
+	UserID      uuid.UUID
 	To          []string
 	CC          []string
 	BCC         []string
