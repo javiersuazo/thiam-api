@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+// Sampler provides rate-limited sampling for log entries.
+// It allows a configurable number of log entries per time interval.
 type Sampler struct {
 	rate      int64
 	counter   atomic.Int64
@@ -13,7 +15,17 @@ type Sampler struct {
 	lastReset atomic.Int64
 }
 
+// NewSampler creates a new Sampler that allows up to rate log entries per interval.
+// Panics if rate or interval is not positive.
 func NewSampler(rate int, interval time.Duration) *Sampler {
+	if rate <= 0 {
+		panic("sampler rate must be positive")
+	}
+
+	if interval <= 0 {
+		panic("sampler interval must be positive")
+	}
+
 	s := &Sampler{
 		rate:     int64(rate),
 		interval: interval,
@@ -24,13 +36,15 @@ func NewSampler(rate int, interval time.Duration) *Sampler {
 	return s
 }
 
+// ShouldLog returns true if the log entry should be emitted based on sampling rate.
 func (s *Sampler) ShouldLog() bool {
 	now := time.Now().UnixNano()
 	lastReset := s.lastReset.Load()
 
 	if now-lastReset > s.interval.Nanoseconds() {
-		s.counter.Store(0)
-		s.lastReset.Store(now)
+		if s.lastReset.CompareAndSwap(lastReset, now) {
+			s.counter.Store(0)
+		}
 	}
 
 	count := s.counter.Add(1)
@@ -38,11 +52,15 @@ func (s *Sampler) ShouldLog() bool {
 	return count <= s.rate
 }
 
+// SampledLogger wraps a logger with rate-limited sampling.
+// Only Debug and Info logs are sampled; Warn, Error, and Fatal
+// always pass through to ensure important messages are not dropped.
 type SampledLogger struct {
 	logger  Interface
 	sampler *Sampler
 }
 
+// NewSampledLogger creates a new SampledLogger that rate-limits Debug and Info logs.
 func NewSampledLogger(l Interface, rate int, interval time.Duration) *SampledLogger {
 	return &SampledLogger{
 		logger:  l,

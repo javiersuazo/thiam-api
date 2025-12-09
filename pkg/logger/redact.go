@@ -20,7 +20,7 @@ var (
 	}
 
 	emailRegex      = regexp.MustCompile(`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`)
-	creditCardRegex = regexp.MustCompile(`\b(?:\d[ -]*?){13,16}\b`)
+	creditCardRegex = regexp.MustCompile(`\b\d{13,16}\b`)
 )
 
 const (
@@ -29,6 +29,9 @@ const (
 	minLocalPartLength = 2
 )
 
+// RedactFields returns a copy of fields with sensitive data redacted.
+// Sensitive keys (password, token, etc.) are replaced with "[REDACTED]".
+// String values are scanned for emails and credit card numbers which are masked.
 func RedactFields(fields map[string]interface{}) map[string]interface{} {
 	result := make(map[string]interface{}, len(fields))
 
@@ -74,6 +77,7 @@ func maskEmail(email string) string {
 	return local[:1] + "***" + local[len(local)-1:] + "@" + parts[1]
 }
 
+// WithRedactedFields returns a logger with the given fields after applying redaction.
 func (l *Logger) WithRedactedFields(fields map[string]interface{}) Interface {
 	return l.WithFields(RedactFields(fields))
 }

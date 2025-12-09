@@ -20,15 +20,20 @@ type ctxKey struct{}
 
 var requestIDKey = ctxKey{} //nolint:gochecknoglobals // used as context key
 
+// Interface defines the logging contract for the application.
 type Interface interface {
 	Debug(message interface{}, args ...interface{})
 	Info(message string, args ...interface{})
 	Warn(message string, args ...interface{})
 	Error(message interface{}, args ...interface{})
 	Fatal(message interface{}, args ...interface{})
+	// WithField returns a logger with the given key-value pair added to log entries.
 	WithField(key string, value interface{}) Interface
+	// WithFields returns a logger with the given fields added to log entries.
 	WithFields(fields map[string]interface{}) Interface
+	// WithRequestID returns a logger with the given request ID added to log entries.
 	WithRequestID(requestID string) Interface
+	// WithContext returns a logger with request ID extracted from context, if present.
 	WithContext(ctx context.Context) Interface
 }
 
@@ -121,10 +126,13 @@ func (l *Logger) WithContext(ctx context.Context) Interface {
 	return l
 }
 
+// ContextWithRequestID adds a request ID to the context.
 func ContextWithRequestID(ctx context.Context, requestID string) context.Context {
 	return context.WithValue(ctx, requestIDKey, requestID)
 }
 
+// RequestIDFromContext retrieves the request ID from the context.
+// Returns an empty string if not found.
 func RequestIDFromContext(ctx context.Context) string {
 	if id, ok := ctx.Value(requestIDKey).(string); ok {
 		return id

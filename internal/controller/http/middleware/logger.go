@@ -28,7 +28,7 @@ func Logger(l logger.Interface) fiber.Handler {
 			"bytes_out":  len(c.Response().Body()),
 		}
 
-		reqLogger := l.WithRequestID(requestID).WithFields(logFields)
+		reqLogger := l.WithRequestID(requestID).WithFields(logger.RedactFields(logFields))
 
 		switch {
 		case status >= http.StatusInternalServerError:

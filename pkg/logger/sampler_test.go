@@ -2,6 +2,7 @@ package logger
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -127,4 +128,62 @@ func TestSampledLogger_WithContext(t *testing.T) {
 
 		assert.Equal(t, sl, result)
 	})
+}
+
+func TestNewSampler_Validation(t *testing.T) {
+	t.Parallel()
+
+	t.Run("panics on zero rate", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Panics(t, func() {
+			NewSampler(0, time.Second)
+		})
+	})
+
+	t.Run("panics on negative rate", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Panics(t, func() {
+			NewSampler(-1, time.Second)
+		})
+	})
+
+	t.Run("panics on zero interval", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Panics(t, func() {
+			NewSampler(10, 0)
+		})
+	})
+
+	t.Run("panics on negative interval", func(t *testing.T) {
+		t.Parallel()
+
+		assert.Panics(t, func() {
+			NewSampler(10, -time.Second)
+		})
+	})
+}
+
+func TestSampler_ConcurrentAccess(t *testing.T) {
+	t.Parallel()
+
+	s := NewSampler(100, time.Second)
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			for j := 0; j < 50; j++ {
+				s.ShouldLog()
+			}
+		}()
+	}
+
+	wg.Wait()
 }

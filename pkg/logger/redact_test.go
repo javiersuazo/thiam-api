@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 //nolint:funlen // table-driven test
@@ -140,4 +141,21 @@ func TestIsSensitiveKey(t *testing.T) {
 	for _, key := range nonSensitiveKeys {
 		assert.False(t, isSensitiveKey(key), "expected %s to not be sensitive", key)
 	}
+}
+
+func TestLogger_WithRedactedFields(t *testing.T) {
+	t.Parallel()
+
+	l := New("info")
+
+	fields := map[string]interface{}{
+		"username": "john",
+		"password": "secret123",
+		"message":  "Contact admin@example.com",
+	}
+
+	result := l.WithRedactedFields(fields)
+
+	require.NotNil(t, result)
+	assert.NotEqual(t, l, result)
 }
