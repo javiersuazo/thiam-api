@@ -1,4 +1,4 @@
-// Package v1 implements routing paths. Each services in own file.
+// Package http implements routing paths. Each services in own file.
 package http
 
 import (
@@ -9,7 +9,6 @@ import (
 	_ "github.com/evrone/go-clean-template/docs" // Swagger docs.
 	"github.com/evrone/go-clean-template/internal/controller/http/middleware"
 	v1 "github.com/evrone/go-clean-template/internal/controller/http/v1"
-	"github.com/evrone/go-clean-template/internal/usecase"
 	"github.com/evrone/go-clean-template/pkg/logger"
 	"github.com/evrone/go-clean-template/pkg/postgres"
 	"github.com/gofiber/fiber/v2"
@@ -19,11 +18,11 @@ import (
 // NewRouter -.
 // Swagger spec:
 // @title       Go Clean Template API
-// @description Using a translation service as an example
+// @description Production-grade Go backend API
 // @version     1.0
 // @host        localhost:8080
 // @BasePath    /v1
-func NewRouter(app *fiber.App, cfg *config.Config, pg *postgres.Postgres, t usecase.Translation, l logger.Interface) {
+func NewRouter(app *fiber.App, cfg *config.Config, pg *postgres.Postgres, l logger.Interface) {
 	// Options
 	app.Use(middleware.Logger(l))
 	app.Use(middleware.Recovery(l))
@@ -45,8 +44,5 @@ func NewRouter(app *fiber.App, cfg *config.Config, pg *postgres.Postgres, t usec
 	v1.NewHealthRoutes(app, pg.Pool)
 
 	// Routers
-	apiV1Group := app.Group("/v1")
-	{
-		v1.NewTranslationRoutes(apiV1Group, t, l)
-	}
+	_ = app.Group("/v1")
 }

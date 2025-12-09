@@ -46,8 +46,11 @@ func (r *OutboxRepo) Store(ctx context.Context, events []event.OutboxEvent) erro
 }
 
 func (r *OutboxRepo) FetchUnpublished(ctx context.Context, limit int) ([]event.OutboxEvent, error) {
-	if limit < 0 {
-		limit = 0
+	const defaultLimit = 100
+
+	safeLimit := uint64(defaultLimit)
+	if limit > 0 {
+		safeLimit = uint64(limit) // #nosec G115 -- limit is validated to be positive
 	}
 
 	sql, args, err := r.Builder.
@@ -55,7 +58,7 @@ func (r *OutboxRepo) FetchUnpublished(ctx context.Context, limit int) ([]event.O
 		From("outbox_events").
 		Where("published_at IS NULL").
 		OrderBy("created_at ASC").
-		Limit(uint64(limit)). //nolint:gosec // limit is checked above
+		Limit(safeLimit).
 		ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("OutboxRepo.FetchUnpublished - build query: %w", err)
