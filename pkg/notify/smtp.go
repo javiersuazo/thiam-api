@@ -3,6 +3,7 @@ package notify
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
@@ -13,6 +14,8 @@ import (
 )
 
 const defaultSMTPTimeout = 30 * time.Second
+
+var errTLSRequired = errors.New("TLS is required for secure email delivery")
 
 type SMTPConfig struct {
 	Host     string
@@ -32,6 +35,10 @@ func NewSMTPSender(config *SMTPConfig) *SMTPSender {
 }
 
 func (s *SMTPSender) Send(ctx context.Context, msg *notification.EmailMessage) error {
+	if !s.config.UseTLS {
+		return errTLSRequired
+	}
+
 	addr := fmt.Sprintf("%s:%d", s.config.Host, s.config.Port)
 
 	var auth smtp.Auth
@@ -41,38 +48,28 @@ func (s *SMTPSender) Send(ctx context.Context, msg *notification.EmailMessage) e
 
 	message := s.buildMessage(msg)
 
-	if s.config.UseTLS {
-		return s.sendWithTLS(ctx, addr, auth, msg.To, message)
-	}
-
-	return smtp.SendMail(addr, auth, s.config.From, msg.To, message)
+	return s.sendWithTLS(ctx, addr, auth, msg.To, message)
 }
 
 func (s *SMTPSender) buildMessage(msg *notification.EmailMessage) []byte {
-	headers := make(map[string]string)
-	headers["From"] = s.config.From
-	headers["To"] = strings.Join(msg.To, ", ")
-	headers["Subject"] = msg.Subject
-	headers["MIME-Version"] = "1.0"
-
-	var body string
+	contentType := "text/plain; charset=UTF-8"
+	body := msg.Body
 
 	if msg.HTMLBody != "" {
-		headers["Content-Type"] = "text/html; charset=UTF-8"
+		contentType = "text/html; charset=UTF-8"
 		body = msg.HTMLBody
-	} else {
-		headers["Content-Type"] = "text/plain; charset=UTF-8"
-		body = msg.Body
 	}
 
-	message := ""
-	for k, v := range headers {
-		message += fmt.Sprintf("%s: %s\r\n", k, v)
-	}
+	var sb strings.Builder
+	sb.WriteString(fmt.Sprintf("From: %s\r\n", s.config.From))
+	sb.WriteString(fmt.Sprintf("To: %s\r\n", strings.Join(msg.To, ", ")))
+	sb.WriteString(fmt.Sprintf("Subject: %s\r\n", msg.Subject))
+	sb.WriteString("MIME-Version: 1.0\r\n")
+	sb.WriteString(fmt.Sprintf("Content-Type: %s\r\n", contentType))
+	sb.WriteString("\r\n")
+	sb.WriteString(body)
 
-	message += "\r\n" + body
-
-	return []byte(message)
+	return []byte(sb.String())
 }
 
 func (s *SMTPSender) sendWithTLS(ctx context.Context, addr string, auth smtp.Auth, to []string, msg []byte) error {

@@ -116,7 +116,7 @@ func (s *Service) SendEmail(ctx context.Context, msg *notification.EmailMessage)
 	}
 
 	prefs, err := s.prefsRepo.Get(ctx, msg.UserID)
-	if err == nil && !prefs.EmailEnabled {
+	if err == nil && prefs != nil && !prefs.EmailEnabled {
 		return nil
 	}
 

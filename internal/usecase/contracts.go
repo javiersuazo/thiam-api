@@ -8,11 +8,11 @@ import (
 	"github.com/google/uuid"
 )
 
-//go:generate mockgen -source=interfaces.go -destination=./mocks_usecase_test.go -package=usecase_test
+//go:generate mockgen -source=contracts.go -destination=./mocks_usecase_test.go -package=usecase_test
 
 type (
-	// InAppNotification handles in-app notification operations.
-	InAppNotification interface {
+	// InAppNotificationUseCase handles in-app notification operations.
+	InAppNotificationUseCase interface {
 		Create(ctx context.Context, n *notification.InAppNotification) error
 		GetByID(ctx context.Context, id uuid.UUID) (*notification.InAppNotification, error)
 		GetByUserID(ctx context.Context, userID uuid.UUID, limit, offset uint64) ([]notification.InAppNotification, error)

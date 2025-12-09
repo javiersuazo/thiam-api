@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
 );
 
 -- Push notification tokens
+-- Note: Only one active token per user+device is allowed. When a device re-registers,
+-- the existing token is updated rather than creating duplicates.
 CREATE TABLE IF NOT EXISTS push_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL,
@@ -44,7 +46,7 @@ CREATE TABLE IF NOT EXISTS push_tokens (
 );
 
 CREATE INDEX idx_push_tokens_user_id ON push_tokens(user_id);
-CREATE INDEX idx_push_tokens_active ON push_tokens(user_id, active) WHERE active = TRUE;
+CREATE INDEX idx_push_tokens_user_active ON push_tokens(user_id) WHERE active = TRUE;
 
 -- Notification delivery logs for audit trail
 CREATE TABLE IF NOT EXISTS notification_delivery_logs (

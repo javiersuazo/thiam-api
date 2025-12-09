@@ -19,8 +19,18 @@ const (
 
 var (
 	errFCMBadStatus = errors.New("fcm returned non-200 status")
-	errFCMSendError = errors.New("fcm send error")
 )
+
+type FCMSendResult struct {
+	SuccessCount int
+	FailureCount int
+	FailedTokens []FailedToken
+}
+
+type FailedToken struct {
+	Token string
+	Error string
+}
 
 type FCMConfig struct {
 	ServerKey string
@@ -75,8 +85,13 @@ type fcmResult struct {
 }
 
 func (f *FCMSender) Send(ctx context.Context, msg *notification.PushMessage, tokens []string) error {
+	_, err := f.SendWithResult(ctx, msg, tokens)
+	return err
+}
+
+func (f *FCMSender) SendWithResult(ctx context.Context, msg *notification.PushMessage, tokens []string) (*FCMSendResult, error) {
 	if len(tokens) == 0 {
-		return nil
+		return &FCMSendResult{}, nil
 	}
 
 	fcmMsg := fcmMessage{
@@ -93,12 +108,12 @@ func (f *FCMSender) Send(ctx context.Context, msg *notification.PushMessage, tok
 
 	payload, err := json.Marshal(fcmMsg)
 	if err != nil {
-		return fmt.Errorf("marshal fcm message: %w", err)
+		return nil, fmt.Errorf("marshal fcm message: %w", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, fcmEndpoint, bytes.NewReader(payload))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
 	req.Header.Set("Authorization", "key="+f.config.ServerKey)
@@ -106,26 +121,35 @@ func (f *FCMSender) Send(ctx context.Context, msg *notification.PushMessage, tok
 
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("send request: %w", err)
+		return nil, fmt.Errorf("send request: %w", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%w: %d", errFCMBadStatus, resp.StatusCode)
+		return nil, fmt.Errorf("%w: %d", errFCMBadStatus, resp.StatusCode)
 	}
 
 	var fcmResp fcmResponse
 	if err := json.NewDecoder(resp.Body).Decode(&fcmResp); err != nil {
-		return fmt.Errorf("decode response: %w", err)
+		return nil, fmt.Errorf("decode response: %w", err)
+	}
+
+	result := &FCMSendResult{
+		SuccessCount: fcmResp.Success,
+		FailureCount: fcmResp.Failure,
 	}
 
 	if fcmResp.Failure > 0 {
-		for _, result := range fcmResp.Results {
-			if result.Error != "" {
-				return fmt.Errorf("%w: %s", errFCMSendError, result.Error)
+		result.FailedTokens = make([]FailedToken, 0, fcmResp.Failure)
+		for i, r := range fcmResp.Results {
+			if r.Error != "" {
+				result.FailedTokens = append(result.FailedTokens, FailedToken{
+					Token: tokens[i],
+					Error: r.Error,
+				})
 			}
 		}
 	}
 
-	return nil
+	return result, nil
 }
