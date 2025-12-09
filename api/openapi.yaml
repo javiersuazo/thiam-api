@@ -83,6 +83,35 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 
   # =============================================================================
+  # AUTH - Configuration
+  # =============================================================================
+
+  /v1/auth/config:
+    get:
+      tags:
+        - Auth
+      summary: Get auth configuration
+      description: |
+        Returns authentication configuration for frontend reference.
+        Includes password requirements, token lifetimes, and rate limits.
+        This endpoint is public and can be cached.
+      operationId: getAuthConfig
+      security: []
+      responses:
+        "200":
+          description: Auth configuration
+          headers:
+            Cache-Control:
+              description: Caching directive
+              schema:
+                type: string
+                example: "public, max-age=3600"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthConfig"
+
+  # =============================================================================
   # AUTH - Core Authentication
   # =============================================================================
 
@@ -1413,6 +1442,88 @@ components:
     # =========================================================================
     # Common Schemas
     # =========================================================================
+
+    ErrorCode:
+      type: string
+      description: |
+        Standardized error codes for the API. Frontend should handle these codes
+        to display appropriate messages and take corrective actions.
+      enum:
+        # Validation & Request Errors (4xx)
+        - VALIDATION_ERROR        # Request body/params failed validation
+        - INVALID_REQUEST         # Malformed request
+        - MISSING_FIELD           # Required field not provided
+        - INVALID_FORMAT          # Field format invalid (email, phone, etc.)
+
+        # Authentication Errors
+        - UNAUTHORIZED            # No valid auth token provided
+        - INVALID_CREDENTIALS     # Wrong email/password
+        - INVALID_TOKEN           # Token malformed or signature invalid
+        - TOKEN_EXPIRED           # Token has expired
+        - SESSION_EXPIRED         # User session has expired
+        - REFRESH_TOKEN_INVALID   # Refresh token invalid or revoked
+        - REFRESH_TOKEN_EXPIRED   # Refresh token has expired
+
+        # Account State Errors
+        - ACCOUNT_LOCKED          # Too many failed attempts, temporarily locked
+        - ACCOUNT_DISABLED        # Account has been disabled by admin
+        - ACCOUNT_NOT_VERIFIED    # Email not verified yet
+        - ACCOUNT_DELETED         # Account has been deleted
+
+        # MFA Errors
+        - MFA_REQUIRED            # MFA challenge required to complete login
+        - MFA_INVALID_CODE        # Wrong MFA code provided
+        - MFA_CODE_EXPIRED        # MFA code has expired
+        - MFA_NOT_ENABLED         # Trying to use MFA when not enabled
+        - MFA_ALREADY_ENABLED     # Trying to enable MFA when already active
+        - TOTP_SETUP_REQUIRED     # Must complete TOTP setup first
+        - RECOVERY_CODE_INVALID   # Invalid recovery code
+        - RECOVERY_CODE_USED      # Recovery code already used
+        - NO_RECOVERY_CODES       # No recovery codes remaining
+
+        # Registration & Uniqueness Errors
+        - EMAIL_ALREADY_EXISTS    # Email already registered
+        - PHONE_ALREADY_EXISTS    # Phone number already registered
+        - USERNAME_ALREADY_EXISTS # Username taken (if applicable)
+
+        # Password Errors
+        - PASSWORD_TOO_WEAK       # Password doesn't meet requirements
+        - PASSWORD_INCORRECT      # Current password wrong (for changes)
+        - PASSWORD_SAME_AS_OLD    # New password same as current
+        - PASSWORD_RESET_EXPIRED  # Password reset token expired
+        - PASSWORD_RESET_INVALID  # Password reset token invalid
+
+        # OAuth Errors
+        - OAUTH_ERROR             # Generic OAuth flow error
+        - OAUTH_STATE_MISMATCH    # CSRF state parameter mismatch
+        - OAUTH_CODE_INVALID      # Authorization code invalid/expired
+        - OAUTH_ACCOUNT_EXISTS    # OAuth email already linked to another account
+        - OAUTH_NOT_LINKED        # Trying to unlink provider that's not linked
+        - OAUTH_LAST_METHOD       # Can't unlink - would leave no login method
+
+        # Passkey Errors
+        - PASSKEY_REGISTRATION_FAILED  # WebAuthn registration failed
+        - PASSKEY_AUTH_FAILED          # WebAuthn authentication failed
+        - PASSKEY_NOT_FOUND            # Passkey doesn't exist
+        - PASSKEY_LAST_METHOD          # Can't delete - would leave no login method
+
+        # Recovery Errors
+        - RECOVERY_SESSION_EXPIRED     # Recovery session timed out
+        - RECOVERY_CODE_INVALID        # Wrong recovery verification code
+        - RECOVERY_NOT_ALLOWED         # Account doesn't support this recovery method
+
+        # Rate Limiting
+        - RATE_LIMITED            # Too many requests
+
+        # Resource Errors
+        - NOT_FOUND               # Resource not found
+        - CONFLICT                # Resource conflict (already exists)
+        - FORBIDDEN               # No permission for this action
+
+        # Server Errors
+        - INTERNAL_ERROR          # Unexpected server error
+        - SERVICE_UNAVAILABLE     # Dependent service down
+
     Error:
       type: object
       required:
@@ -1420,22 +1531,135 @@ components:
         - message
       properties:
         code:
-          type: string
-          description: Machine-readable error code
-          example: VALIDATION_ERROR
+          $ref: "#/components/schemas/ErrorCode"
         message:
           type: string
-          description: Human-readable error message
+          description: Human-readable error message (can be shown to user)
           example: Invalid request parameters
         details:
           type: object
           additionalProperties: true
-          description: Additional error details
+          description: |
+            Additional error context. Structure varies by error type:
+            - VALIDATION_ERROR: { "field_name": "error message", ... }
+            - PASSWORD_TOO_WEAK: { "requirements": ["min 8 chars", "1 uppercase", ...] }
+            - ACCOUNT_LOCKED: { "locked_until": "2024-01-15T10:30:00Z", "attempts_remaining": 0 }
+            - RATE_LIMITED: { "retry_after": 60, "limit": 100, "window": "1h" }
+            - MFA_REQUIRED: { "challenge_token": "...", "methods": ["totp", "sms"] }
+          example:
+            email: must be a valid email address
         request_id:
           type: string
           format: uuid
-          description: Request ID for tracing
+          description: Request ID for tracing (include in bug reports)
           example: 550e8400-e29b-41d4-a716-446655440000
+
+    # =========================================================================
+    # Auth Configuration (for frontend reference)
+    # =========================================================================
+
+    AuthConfig:
+      type: object
+      description: |
+        Authentication configuration constants. These values are for frontend
+        reference and may be returned by a /v1/auth/config endpoint in the future.
+      properties:
+        password_requirements:
+          type: object
+          properties:
+            min_length:
+              type: integer
+              example: 8
+            max_length:
+              type: integer
+              example: 128
+            require_uppercase:
+              type: boolean
+              example: true
+            require_lowercase:
+              type: boolean
+              example: true
+            require_number:
+              type: boolean
+              example: true
+            require_special:
+              type: boolean
+              example: false
+        token_expiration:
+          type: object
+          properties:
+            access_token_seconds:
+              type: integer
+              description: Access token lifetime
+              example: 900
+            refresh_token_seconds:
+              type: integer
+              description: Refresh token lifetime (remember_me=false)
+              example: 86400
+            refresh_token_remember_seconds:
+              type: integer
+              description: Refresh token lifetime (remember_me=true)
+              example: 2592000
+            password_reset_seconds:
+              type: integer
+              description: Password reset token lifetime
+              example: 3600
+            email_verification_seconds:
+              type: integer
+              description: Email verification token lifetime
+              example: 86400
+            mfa_code_seconds:
+              type: integer
+              description: MFA OTP code lifetime
+              example: 300
+            recovery_session_seconds:
+              type: integer
+              description: Account recovery session lifetime
+              example: 900
+        rate_limits:
+          type: object
+          properties:
+            login_attempts:
+              type: object
+              properties:
+                max_attempts:
+                  type: integer
+                  example: 5
+                window_seconds:
+                  type: integer
+                  example: 900
+                lockout_seconds:
+                  type: integer
+                  example: 900
+            password_reset_requests:
+              type: object
+              properties:
+                max_requests:
+                  type: integer
+                  example: 3
+                window_seconds:
+                  type: integer
+                  example: 3600
+            mfa_attempts:
+              type: object
+              properties:
+                max_attempts:
+                  type: integer
+                  example: 5
+                window_seconds:
+                  type: integer
+                  example: 300
+        recovery_codes:
+          type: object
+          properties:
+            count:
+              type: integer
+              description: Number of recovery codes generated
+              example: 10
+            format:
+              type: string
+              description: Recovery code format
+              example: "XXXX-XXXX"
 
     HealthStatus:
       type: object
