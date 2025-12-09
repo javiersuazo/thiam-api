@@ -55,6 +55,7 @@ func (m *mockPushSender) Send(ctx context.Context, msg *notification.PushMessage
 	return nil
 }
 
+//nolint:funlen // table-driven tests are verbose
 func TestService_SendInApp(t *testing.T) {
 	t.Parallel()
 
@@ -149,6 +150,7 @@ func TestService_SendInApp(t *testing.T) {
 	}
 }
 
+//nolint:funlen // table-driven tests are verbose
 func TestService_SendPush(t *testing.T) {
 	t.Parallel()
 
@@ -300,6 +302,7 @@ func TestService_SendPush(t *testing.T) {
 	}
 }
 
+//nolint:funlen // table-driven tests are verbose
 func TestService_SendEmail(t *testing.T) {
 	t.Parallel()
 

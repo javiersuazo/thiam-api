@@ -51,7 +51,7 @@ func (w *Worker) processEvents(ctx context.Context, events <-chan eventbus.Event
 func (w *Worker) handleEvent(ctx context.Context, e eventbus.Event) {
 	w.log.Info("Received event type: %s", e.Type)
 
-	// TODO: Implement event handlers based on domain event types:
+	// Event handlers will be implemented based on domain event types:
 	// - user.created: Send welcome notification
 	// - order.completed: Send order confirmation
 	// - payment.failed: Send payment failure alert

@@ -17,9 +17,7 @@ const (
 	defaultFCMTimeout = 10 * time.Second
 )
 
-var (
-	errFCMBadStatus = errors.New("fcm returned non-200 status")
-)
+var errFCMBadStatus = errors.New("fcm returned non-200 status")
 
 type FCMSendResult struct {
 	SuccessCount int
@@ -86,6 +84,7 @@ type fcmResult struct {
 
 func (f *FCMSender) Send(ctx context.Context, msg *notification.PushMessage, tokens []string) error {
 	_, err := f.SendWithResult(ctx, msg, tokens)
+
 	return err
 }
 

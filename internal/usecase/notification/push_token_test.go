@@ -105,6 +105,7 @@ func TestPushTokenUseCase_Register(t *testing.T) {
 	}
 }
 
+//nolint:funlen // table-driven tests are verbose
 func TestPushTokenUseCase_GetByUserID(t *testing.T) {
 	t.Parallel()
 

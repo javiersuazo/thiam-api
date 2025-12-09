@@ -55,7 +55,7 @@ func (r *OutboxRepo) FetchUnpublished(ctx context.Context, limit int) ([]event.O
 		From("outbox_events").
 		Where("published_at IS NULL").
 		OrderBy("created_at ASC").
-		Limit(uint64(limit)). //nolint:gosec // limit is checked above
+		Limit(uint64(limit)).
 		ToSql()
 	if err != nil {
 		return nil, fmt.Errorf("OutboxRepo.FetchUnpublished - build query: %w", err)

@@ -73,8 +73,10 @@ func TestFCMSender_Send_Success(t *testing.T) {
 				{MessageID: "msg-2"},
 			},
 		}
+
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
+		//nolint:errcheck // test helper
+		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -109,8 +111,10 @@ func TestFCMSender_SendWithResult_PartialFailure(t *testing.T) {
 				{Error: "InvalidRegistration"},
 			},
 		}
+
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(resp)
+		//nolint:errcheck // test helper
+		json.NewEncoder(w).Encode(resp)
 	}))
 	defer server.Close()
 
@@ -167,7 +171,8 @@ func TestFCMSender_Send_InvalidJSON(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte("invalid json"))
+		//nolint:errcheck // test helper
+		w.Write([]byte("invalid json"))
 	}))
 	defer server.Close()
 
