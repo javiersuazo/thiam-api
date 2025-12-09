@@ -1,34 +1,43 @@
 package middleware
 
 import (
-	"strconv"
-	"strings"
+	"net/http"
+	"time"
 
 	"github.com/evrone/go-clean-template/pkg/logger"
 	"github.com/gofiber/fiber/v2"
 )
 
-func buildRequestMessage(ctx *fiber.Ctx) string {
-	var result strings.Builder
+func Logger(l logger.Interface) fiber.Handler {
+	return func(c *fiber.Ctx) error {
+		start := time.Now()
 
-	result.WriteString(ctx.IP())
-	result.WriteString(" - ")
-	result.WriteString(ctx.Method())
-	result.WriteString(" ")
-	result.WriteString(ctx.OriginalURL())
-	result.WriteString(" - ")
-	result.WriteString(strconv.Itoa(ctx.Response().StatusCode()))
-	result.WriteString(" ")
-	result.WriteString(strconv.Itoa(len(ctx.Response().Body())))
+		err := c.Next()
 
-	return result.String()
-}
+		latency := time.Since(start)
+		status := c.Response().StatusCode()
+		requestID := GetRequestID(c)
 
-func Logger(l logger.Interface) func(c *fiber.Ctx) error {
-	return func(ctx *fiber.Ctx) error {
-		err := ctx.Next()
+		logFields := map[string]interface{}{
+			"method":     c.Method(),
+			"path":       c.Path(),
+			"status":     status,
+			"latency_ms": latency.Milliseconds(),
+			"ip":         c.IP(),
+			"user_agent": c.Get("User-Agent"),
+			"bytes_out":  len(c.Response().Body()),
+		}
 
-		l.Info(buildRequestMessage(ctx))
+		reqLogger := l.WithRequestID(requestID).WithFields(logger.RedactFields(logFields))
+
+		switch {
+		case status >= http.StatusInternalServerError:
+			reqLogger.Error("server error")
+		case status >= http.StatusBadRequest:
+			reqLogger.Warn("client error")
+		default:
+			reqLogger.Info("request completed")
+		}
 
 		return err
 	}

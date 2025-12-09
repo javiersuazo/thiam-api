@@ -9,6 +9,7 @@ import (
 
 	"github.com/evrone/go-clean-template/internal/entity/event"
 	"github.com/evrone/go-clean-template/pkg/eventbus"
+	"github.com/evrone/go-clean-template/pkg/logger"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,11 +134,15 @@ func (m *mockPublisher) Close() error {
 
 type mockLogger struct{}
 
-func (m *mockLogger) Debug(_ interface{}, _ ...interface{}) {}
-func (m *mockLogger) Info(_ string, _ ...interface{})       {}
-func (m *mockLogger) Warn(_ string, _ ...interface{})       {}
-func (m *mockLogger) Error(_ interface{}, _ ...interface{}) {}
-func (m *mockLogger) Fatal(_ interface{}, _ ...interface{}) {}
+func (m *mockLogger) Debug(_ interface{}, _ ...interface{})                {}
+func (m *mockLogger) Info(_ string, _ ...interface{})                      {}
+func (m *mockLogger) Warn(_ string, _ ...interface{})                      {}
+func (m *mockLogger) Error(_ interface{}, _ ...interface{})                {}
+func (m *mockLogger) Fatal(_ interface{}, _ ...interface{})                {}
+func (m *mockLogger) WithField(_ string, _ interface{}) logger.Interface   { return m }
+func (m *mockLogger) WithFields(_ map[string]interface{}) logger.Interface { return m }
+func (m *mockLogger) WithRequestID(_ string) logger.Interface              { return m }
+func (m *mockLogger) WithContext(_ context.Context) logger.Interface       { return m }
 
 func TestWorker_ProcessesEvents(t *testing.T) {
 	t.Parallel()
@@ -159,12 +164,12 @@ func TestWorker_ProcessesEvents(t *testing.T) {
 		onPublished: onPublished,
 	}
 	publisher := &mockPublisher{}
-	logger := &mockLogger{}
+	log := &mockLogger{}
 
 	worker := eventbus.NewWorker(
 		repo,
 		publisher,
-		logger,
+		log,
 		eventbus.WithPollInterval(10*time.Millisecond),
 		eventbus.WithBatchSize(10),
 	)
@@ -215,12 +220,12 @@ func TestWorker_HandlesPublishError(t *testing.T) {
 	publisher := &mockPublisher{
 		publishErr: errConnectionFailed,
 	}
-	logger := &mockLogger{}
+	log := &mockLogger{}
 
 	worker := eventbus.NewWorker(
 		repo,
 		publisher,
-		logger,
+		log,
 		eventbus.WithPollInterval(10*time.Millisecond),
 	)
 
@@ -261,12 +266,12 @@ func TestWorker_SkipsMaxRetries(t *testing.T) {
 		},
 	}
 	publisher := &mockPublisher{}
-	logger := &mockLogger{}
+	log := &mockLogger{}
 
 	worker := eventbus.NewWorker(
 		repo,
 		publisher,
-		logger,
+		log,
 		eventbus.WithPollInterval(10*time.Millisecond),
 		eventbus.WithMaxRetries(5),
 	)
