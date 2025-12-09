@@ -89,10 +89,17 @@ else
             echo "Generated: $OUTPUT_DIR/api.ts"
             ;;
         fetch)
-            echo "Generating fetch client..."
+            echo "Generating TypeScript types for use with openapi-fetch..."
             npx openapi-typescript "$SPEC_FILE" -o "$OUTPUT_DIR/api.ts"
-            npx openapi-fetch "$SPEC_FILE" -o "$OUTPUT_DIR/client.ts"
-            echo "Generated: $OUTPUT_DIR/api.ts, $OUTPUT_DIR/client.ts"
+            echo "Generated: $OUTPUT_DIR/api.ts"
+            echo ""
+            echo "To use with openapi-fetch, install it in your project:"
+            echo "  npm install openapi-fetch"
+            echo ""
+            echo "Then use in your code:"
+            echo "  import createClient from 'openapi-fetch'"
+            echo "  import type { paths } from '$OUTPUT_DIR/api'"
+            echo "  const client = createClient<paths>({ baseUrl: 'http://localhost:8080' })"
             ;;
         axios)
             echo "Generating axios client..."
@@ -109,7 +116,9 @@ else
             ;;
     esac
 
-    echo ""
-    echo "Done! Import in your code:"
-    echo "  import type { paths, components } from '$OUTPUT_DIR/api'"
+    if [ "$OUTPUT_TYPE" = "typescript" ]; then
+        echo ""
+        echo "Done! Import in your code:"
+        echo "  import type { paths, components } from '$OUTPUT_DIR/api.ts'"
+    fi
 fi

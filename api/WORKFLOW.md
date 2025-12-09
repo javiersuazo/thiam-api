@@ -142,7 +142,7 @@ FE and BE meet to:
 ### Spec Design
 - Use `$ref` for reusable schemas
 - Include examples in schemas
-- Use consistent naming (camelCase for JSON, snake_case for query params)
+- Use consistent naming (snake_case for JSON and query params)
 - Document all error responses
 
 ### Versioning

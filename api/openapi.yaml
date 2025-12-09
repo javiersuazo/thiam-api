@@ -13,7 +13,7 @@ info:
 
     ### For Frontend
     - Generate TypeScript client: `npx openapi-typescript api/openapi.yaml -o types/api.ts`
-    - Run mock server: `npx prism mock api/openapi.yaml`
+    - Run mock server: `./api/scripts/generate-client.sh --mock`
   version: 1.0.0
   contact:
     name: Thiam Team
