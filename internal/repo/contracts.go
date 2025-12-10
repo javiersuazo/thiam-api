@@ -4,14 +4,21 @@ package repo
 import (
 	"context"
 
+	"github.com/evrone/go-clean-template/internal/entity/auth"
 	"github.com/evrone/go-clean-template/internal/entity/event"
 	"github.com/evrone/go-clean-template/internal/entity/notification"
+	"github.com/evrone/go-clean-template/pkg/postgres"
 	"github.com/google/uuid"
 )
 
 //go:generate mockgen -source=contracts.go -destination=mocks/repo_mock.go -package=mocks
 
 type (
+	// TxManager handles database transactions.
+	TxManager interface {
+		WithTransaction(ctx context.Context, fn func(ctx context.Context) error) error
+	}
+
 	// OutboxRepo handles outbox event persistence.
 	OutboxRepo interface {
 		Store(ctx context.Context, events []event.OutboxEvent) error
@@ -48,5 +55,24 @@ type (
 	DeliveryLogRepo interface {
 		Store(ctx context.Context, log *notification.DeliveryLog) error
 		GetByNotificationID(ctx context.Context, notificationID uuid.UUID) ([]notification.DeliveryLog, error)
+	}
+
+	// UserRepo handles user persistence.
+	UserRepo interface {
+		Create(ctx context.Context, user *auth.User) error
+		CreateTx(ctx context.Context, tx postgres.DBTX, user *auth.User) error
+		GetByID(ctx context.Context, id uuid.UUID) (*auth.User, error)
+		GetByEmail(ctx context.Context, email string) (*auth.User, error)
+		Update(ctx context.Context, user *auth.User) error
+		ExistsByEmail(ctx context.Context, email string) (bool, error)
+	}
+
+	// RefreshTokenRepo handles refresh token persistence.
+	RefreshTokenRepo interface {
+		Create(ctx context.Context, token *auth.RefreshToken) error
+		CreateTx(ctx context.Context, tx postgres.DBTX, token *auth.RefreshToken) error
+		GetByTokenHash(ctx context.Context, tokenHash string) (*auth.RefreshToken, error)
+		Revoke(ctx context.Context, id uuid.UUID) error
+		RevokeByFamilyID(ctx context.Context, familyID uuid.UUID) error
 	}
 )

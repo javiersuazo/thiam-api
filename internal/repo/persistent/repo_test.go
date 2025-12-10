@@ -40,3 +40,17 @@ func TestNewOutboxRepo(t *testing.T) {
 	repo := NewOutboxRepo(nil)
 	assert.NotNil(t, repo)
 }
+
+func TestNewUserRepo(t *testing.T) {
+	t.Parallel()
+
+	repo := NewUserRepo(nil)
+	assert.NotNil(t, repo)
+}
+
+func TestNewRefreshTokenRepo(t *testing.T) {
+	t.Parallel()
+
+	repo := NewRefreshTokenRepo(nil)
+	assert.NotNil(t, repo)
+}
