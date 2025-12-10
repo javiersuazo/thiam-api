@@ -4,13 +4,27 @@ package usecase
 import (
 	"context"
 
+	"github.com/evrone/go-clean-template/internal/entity/auth"
 	"github.com/evrone/go-clean-template/internal/entity/notification"
+	authuc "github.com/evrone/go-clean-template/internal/usecase/auth"
+	pkgauth "github.com/evrone/go-clean-template/pkg/auth"
 	"github.com/google/uuid"
 )
 
 //go:generate mockgen -source=contracts.go -destination=./mocks_usecase_test.go -package=usecase_test
 
 type (
+	// AuthUseCase handles authentication operations.
+	AuthUseCase interface {
+		Register(ctx context.Context, input *authuc.RegisterInput) (*authuc.RegisterOutput, error)
+		Login(ctx context.Context, input *authuc.LoginInput) (*authuc.LoginOutput, error)
+		Logout(ctx context.Context, refreshToken string) error
+		LogoutAll(ctx context.Context, userID uuid.UUID) error
+		RefreshToken(ctx context.Context, input *authuc.RefreshTokenInput) (*authuc.RefreshTokenOutput, error)
+		GetCurrentUser(ctx context.Context, userID uuid.UUID) (*auth.User, error)
+		ValidateAccessToken(tokenString string) (*pkgauth.Claims, error)
+	}
+
 	// InAppNotificationUseCase handles in-app notification operations.
 	InAppNotificationUseCase interface {
 		Create(ctx context.Context, n *notification.InAppNotification) error
