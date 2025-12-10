@@ -29,6 +29,16 @@ tags:
     description: Health check endpoints
   - name: Auth
     description: Authentication and authorization
+  - name: Auth - Social
+    description: OAuth social login providers
+  - name: Auth - Password
+    description: Password management
+  - name: Auth - MFA
+    description: Multi-factor authentication
+  - name: Auth - Passkeys
+    description: WebAuthn/FIDO2 passkey authentication
+  - name: Auth - Recovery
+    description: Account recovery options
   - name: Users
     description: User management
 
@@ -40,6 +50,7 @@ paths:
       summary: Liveness probe
       description: Returns 200 if the service is running
       operationId: healthz
+      security: []
       responses:
         "200":
           description: Service is healthy
@@ -56,6 +67,7 @@ paths:
       summary: Readiness probe
       description: Returns 200 if the service is ready to accept traffic
       operationId: readyz
+      security: []
       responses:
         "200":
           description: Service is ready
@@ -71,58 +83,1698 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 
   # =============================================================================
-  # ADD NEW ENDPOINTS BELOW - Design before implementing
+  # AUTH - Configuration
   # =============================================================================
-  #
-  # Example: User endpoints (uncomment and modify when ready to implement)
-  #
-  # /v1/users:
-  #   get:
-  #     tags:
-  #       - Users
-  #     summary: List users
-  #     operationId: listUsers
-  #     parameters:
-  #       - $ref: "#/components/parameters/PageParam"
-  #       - $ref: "#/components/parameters/LimitParam"
-  #     responses:
-  #       "200":
-  #         description: List of users
-  #         content:
-  #           application/json:
-  #             schema:
-  #               $ref: "#/components/schemas/UserList"
-  #       "401":
-  #         $ref: "#/components/responses/Unauthorized"
-  #
-  #   post:
-  #     tags:
-  #       - Users
-  #     summary: Create user
-  #     operationId: createUser
-  #     requestBody:
-  #       required: true
-  #       content:
-  #         application/json:
-  #           schema:
-  #             $ref: "#/components/schemas/CreateUserRequest"
-  #     responses:
-  #       "201":
-  #         description: User created
-  #         content:
-  #           application/json:
-  #             schema:
-  #               $ref: "#/components/schemas/User"
-  #       "400":
-  #         $ref: "#/components/responses/BadRequest"
-  #       "409":
-  #         $ref: "#/components/responses/Conflict"
+
+  /v1/auth/config:
+    get:
+      tags:
+        - Auth
+      summary: Get auth configuration
+      description: |
+        Returns authentication configuration for frontend reference.
+        Includes password requirements, token lifetimes, and rate limits.
+        This endpoint is public and can be cached.
+      operationId: getAuthConfig
+      security: []
+      responses:
+        "200":
+          description: Auth configuration
+          headers:
+            Cache-Control:
+              description: Caching directive
+              schema:
+                type: string
+                example: "public, max-age=3600"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthConfig"
+
+  # =============================================================================
+  # AUTH - Core Authentication
+  # =============================================================================
+
+  /v1/auth/register:
+    post:
+      tags:
+        - Auth
+      summary: Register new user
+      description: Create a new user account with email and password
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/login:
+    post:
+      tags:
+        - Auth
+      summary: Login with credentials
+      description: Authenticate with email and password
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Account locked or MFA required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginChallenge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/logout:
+    post:
+      tags:
+        - Auth
+      summary: Logout user
+      description: Invalidate current session and refresh token
+      operationId: logout
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LogoutRequest"
+      responses:
+        "204":
+          description: Logged out successfully
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/refresh:
+    post:
+      tags:
+        - Auth
+      summary: Refresh access token
+      description: Get new access token using refresh token
+      operationId: refreshToken
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RefreshRequest"
+      responses:
+        "200":
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/me:
+    get:
+      tags:
+        - Auth
+      summary: Get current user
+      description: Get authenticated user's profile
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # =============================================================================
+  # AUTH - Magic Link (Passwordless Login)
+  # =============================================================================
+
+  /v1/auth/magic-link/send:
+    post:
+      tags:
+        - Auth
+      summary: Send magic link
+      description: |
+        Send a passwordless login link via email or SMS.
+        User clicks the link or enters the OTP to authenticate.
+      operationId: sendMagicLink
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMagicLinkRequest"
+      responses:
+        "202":
+          description: Magic link sent if account exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MagicLinkSentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/magic-link/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify magic link
+      description: |
+        Authenticate using magic link token (from email link) or OTP code (from SMS).
+        Returns auth tokens on success.
+      operationId: verifyMagicLink
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyMagicLinkRequest"
+      responses:
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired magic link/code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                expired:
+                  value:
+                    code: TOKEN_EXPIRED
+                    message: Magic link has expired
+                invalid:
+                  value:
+                    code: INVALID_TOKEN
+                    message: Invalid magic link or code
+        "403":
+          description: MFA required after magic link verification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginChallenge"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/magic-link/resend:
+    post:
+      tags:
+        - Auth
+      summary: Resend magic link
+      description: Resend magic link/OTP for an existing magic link session
+      operationId: resendMagicLink
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendMagicLinkRequest"
+      responses:
+        "200":
+          description: Magic link resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MagicLinkSentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # =============================================================================
+  # AUTH - Security Audit Log
+  # =============================================================================
+
+  /v1/auth/security/events:
+    get:
+      tags:
+        - Auth
+      summary: Get security events
+      description: |
+        Returns security audit log for the authenticated user.
+        Includes login attempts, password changes, MFA changes, etc.
+      operationId: getSecurityEvents
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: event_type
+          in: query
+          description: Filter by event type
+          schema:
+            $ref: "#/components/schemas/SecurityEventType"
+        - name: from
+          in: query
+          description: Filter events from this date
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Filter events until this date
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Security events list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityEventList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/security/events/{event_id}:
+    get:
+      tags:
+        - Auth
+      summary: Get security event details
+      description: Get detailed information about a specific security event
+      operationId: getSecurityEvent
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: event_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Security event details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SecurityEvent"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # =============================================================================
+  # AUTH - Availability Checks
+  # =============================================================================
+
+  /v1/auth/check/email:
+    post:
+      tags:
+        - Auth
+      summary: Check email availability
+      description: |
+        Check if an email address is available for registration.
+        Use before registration to provide instant feedback.
+      operationId: checkEmailAvailability
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckEmailRequest"
+      responses:
+        "200":
+          description: Availability result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/check/phone:
+    post:
+      tags:
+        - Auth
+      summary: Check phone availability
+      description: |
+        Check if a phone number is available for registration.
+        Use before registration to provide instant feedback.
+      operationId: checkPhoneAvailability
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CheckPhoneRequest"
+      responses:
+        "200":
+          description: Availability result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvailabilityResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # =============================================================================
+  # AUTH - Social Login (OAuth)
+  # =============================================================================
+
+  /v1/auth/oauth/{provider}/authorize:
+    get:
+      tags:
+        - Auth - Social
+      summary: Start OAuth flow
+      description: Redirect to OAuth provider for authorization
+      operationId: oauthAuthorize
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/OAuthProvider"
+        - name: redirect_uri
+          in: query
+          required: false
+          description: URI to redirect after OAuth completion
+          schema:
+            type: string
+            format: uri
+        - name: state
+          in: query
+          required: false
+          description: CSRF protection state parameter
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to OAuth provider
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /v1/auth/oauth/{provider}/callback:
+    post:
+      tags:
+        - Auth - Social
+      summary: OAuth callback
+      description: Handle OAuth provider callback and exchange code for tokens
+      operationId: oauthCallback
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/OAuthProvider"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OAuthCallbackRequest"
+      responses:
+        "200":
+          description: OAuth login successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/oauth/connections:
+    get:
+      tags:
+        - Auth - Social
+      summary: List OAuth connections
+      description: Get user's linked OAuth provider accounts
+      operationId: listOAuthConnections
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of connected providers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthConnectionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/oauth/connections/{provider}:
+    delete:
+      tags:
+        - Auth - Social
+      summary: Unlink OAuth provider
+      description: Remove linked OAuth provider account
+      operationId: unlinkOAuthProvider
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/OAuthProvider"
+      responses:
+        "204":
+          description: Provider unlinked
+        "400":
+          description: Cannot unlink - would leave account without login method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # =============================================================================
+  # AUTH - Password Management
+  # =============================================================================
+
+  /v1/auth/password/forgot:
+    post:
+      tags:
+        - Auth - Password
+      summary: Request password reset
+      description: Send password reset email to user
+      operationId: forgotPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "202":
+          description: Reset email sent if account exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/password/reset:
+    post:
+      tags:
+        - Auth - Password
+      summary: Reset password
+      description: Set new password using reset token
+      operationId: resetPassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired reset token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/password/change:
+    post:
+      tags:
+        - Auth - Password
+      summary: Change password
+      description: Update password for authenticated user
+      operationId: changePassword
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/password/validate:
+    post:
+      tags:
+        - Auth - Password
+      summary: Validate password strength
+      description: Check password against security requirements
+      operationId: validatePassword
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ValidatePasswordRequest"
+      responses:
+        "200":
+          description: Password validation result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasswordValidationResult"
+
+  # =============================================================================
+  # AUTH - Multi-Factor Authentication (MFA)
+  # =============================================================================
+
+  /v1/auth/mfa/status:
+    get:
+      tags:
+        - Auth - MFA
+      summary: Get MFA status
+      description: Get user's MFA configuration status
+      operationId: getMfaStatus
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: MFA status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/mfa/totp/setup:
+    post:
+      tags:
+        - Auth - MFA
+      summary: Setup TOTP
+      description: Initialize TOTP authenticator app setup
+      operationId: setupTotp
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: TOTP setup initiated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TotpSetupResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: TOTP already configured
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/mfa/totp/verify:
+    post:
+      tags:
+        - Auth - MFA
+      summary: Verify TOTP setup
+      description: Confirm TOTP setup with verification code
+      operationId: verifyTotpSetup
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TotpVerifyRequest"
+      responses:
+        "200":
+          description: TOTP enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaEnabledResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/mfa/totp:
+    delete:
+      tags:
+        - Auth - MFA
+      summary: Disable TOTP
+      description: Remove TOTP authenticator
+      operationId: disableTotp
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisableMfaRequest"
+      responses:
+        "204":
+          description: TOTP disabled
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/mfa/sms/setup:
+    post:
+      tags:
+        - Auth - MFA
+      summary: Setup SMS MFA
+      description: Initialize SMS-based MFA with phone number
+      operationId: setupSmsMfa
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsSetupRequest"
+      responses:
+        "200":
+          description: SMS verification sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/mfa/sms/verify:
+    post:
+      tags:
+        - Auth - MFA
+      summary: Verify SMS setup
+      description: Confirm SMS MFA setup with verification code
+      operationId: verifySmsSetup
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsVerifyRequest"
+      responses:
+        "200":
+          description: SMS MFA enabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MfaEnabledResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/mfa/sms:
+    delete:
+      tags:
+        - Auth - MFA
+      summary: Disable SMS MFA
+      description: Remove SMS-based MFA
+      operationId: disableSmsMfa
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisableMfaRequest"
+      responses:
+        "204":
+          description: SMS MFA disabled
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/mfa/challenge:
+    post:
+      tags:
+        - Auth - MFA
+      summary: Submit MFA challenge
+      description: Complete login by providing MFA code
+      operationId: submitMfaChallenge
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MfaChallengeRequest"
+      responses:
+        "200":
+          description: MFA verified, login complete
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/mfa/send-code:
+    post:
+      tags:
+        - Auth - MFA
+      summary: Send MFA code
+      description: Request new SMS OTP code for MFA challenge
+      operationId: sendMfaCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMfaCodeRequest"
+      responses:
+        "200":
+          description: Code sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # =============================================================================
+  # AUTH - Passkeys (WebAuthn/FIDO2)
+  # =============================================================================
+
+  /v1/auth/passkeys:
+    get:
+      tags:
+        - Auth - Passkeys
+      summary: List passkeys
+      description: Get user's registered passkeys
+      operationId: listPasskeys
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of passkeys
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/passkeys/register/start:
+    post:
+      tags:
+        - Auth - Passkeys
+      summary: Start passkey registration
+      description: Begin WebAuthn registration ceremony
+      operationId: startPasskeyRegistration
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Registration options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyRegistrationOptions"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/passkeys/register/finish:
+    post:
+      tags:
+        - Auth - Passkeys
+      summary: Finish passkey registration
+      description: Complete WebAuthn registration ceremony
+      operationId: finishPasskeyRegistration
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyRegistrationResponse"
+      responses:
+        "201":
+          description: Passkey registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Passkey"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/passkeys/authenticate/start:
+    post:
+      tags:
+        - Auth - Passkeys
+      summary: Start passkey authentication
+      description: Begin WebAuthn authentication ceremony
+      operationId: startPasskeyAuthentication
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyAuthStartRequest"
+      responses:
+        "200":
+          description: Authentication options
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PasskeyAuthenticationOptions"
+
+  /v1/auth/passkeys/authenticate/finish:
+    post:
+      tags:
+        - Auth - Passkeys
+      summary: Finish passkey authentication
+      description: Complete WebAuthn authentication ceremony
+      operationId: finishPasskeyAuthentication
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasskeyAuthenticationResponse"
+      responses:
+        "200":
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/passkeys/{passkey_id}:
+    patch:
+      tags:
+        - Auth - Passkeys
+      summary: Update passkey
+      description: Update passkey name
+      operationId: updatePasskey
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: passkey_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePasskeyRequest"
+      responses:
+        "200":
+          description: Passkey updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Passkey"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags:
+        - Auth - Passkeys
+      summary: Delete passkey
+      description: Remove a registered passkey
+      operationId: deletePasskey
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: passkey_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Passkey deleted
+        "400":
+          description: Cannot delete - would leave account without login method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # =============================================================================
+  # AUTH - Recovery
+  # =============================================================================
+
+  /v1/auth/recovery/codes:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Generate recovery codes
+      description: Generate new set of recovery codes (invalidates old ones)
+      operationId: generateRecoveryCodes
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPasswordRequest"
+      responses:
+        "200":
+          description: Recovery codes generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodesResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    get:
+      tags:
+        - Auth - Recovery
+      summary: Get recovery codes status
+      description: Get count of remaining recovery codes
+      operationId: getRecoveryCodesStatus
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: Recovery codes status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryCodesStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/recovery/use-code:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Use recovery code
+      description: Login using a recovery code (for account recovery)
+      operationId: useRecoveryCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UseRecoveryCodeRequest"
+      responses:
+        "200":
+          description: Recovery successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/sessions:
+    get:
+      tags:
+        - Auth
+      summary: List active sessions
+      description: Get all active sessions for current user
+      operationId: listSessions
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionList"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/sessions/{session_id}:
+    delete:
+      tags:
+        - Auth
+      summary: Revoke session
+      description: Terminate a specific session
+      operationId: revokeSession
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: session_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Session revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /v1/auth/sessions/revoke-all:
+    post:
+      tags:
+        - Auth
+      summary: Revoke all sessions
+      description: Terminate all sessions except current
+      operationId: revokeAllSessions
+      security:
+        - BearerAuth: []
+      responses:
+        "200":
+          description: All other sessions revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/email/verify:
+    post:
+      tags:
+        - Auth
+      summary: Verify email
+      description: Verify user's email address with token
+      operationId: verifyEmail
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyEmailRequest"
+      responses:
+        "200":
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired verification token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/email/resend-verification:
+    post:
+      tags:
+        - Auth
+      summary: Resend verification email
+      description: Send new email verification link
+      operationId: resendVerificationEmail
+      security:
+        - BearerAuth: []
+      responses:
+        "202":
+          description: Verification email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Email already verified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # =============================================================================
+  # AUTH - Profile Management (Authenticated)
+  # =============================================================================
+
+  /v1/auth/profile:
+    patch:
+      tags:
+        - Auth
+      summary: Update profile
+      description: Update user's profile information (name, avatar)
+      operationId: updateProfile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/email/change:
+    post:
+      tags:
+        - Auth
+      summary: Request email change
+      description: Initiate email change - sends verification to new email
+      operationId: requestEmailChange
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangeEmailRequest"
+      responses:
+        "202":
+          description: Verification email sent to new address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/email/change/confirm:
+    post:
+      tags:
+        - Auth
+      summary: Confirm email change
+      description: Complete email change with verification token
+      operationId: confirmEmailChange
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmEmailChangeRequest"
+      responses:
+        "200":
+          description: Email changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/phone/change:
+    post:
+      tags:
+        - Auth
+      summary: Request phone change
+      description: Initiate phone number change - sends OTP to new number
+      operationId: requestPhoneChange
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePhoneRequest"
+      responses:
+        "200":
+          description: OTP sent to new phone number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Phone number already in use
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/phone/change/confirm:
+    post:
+      tags:
+        - Auth
+      summary: Confirm phone change
+      description: Complete phone change with OTP verification
+      operationId: confirmPhoneChange
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPhoneChangeRequest"
+      responses:
+        "200":
+          description: Phone number changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/phone/remove:
+    post:
+      tags:
+        - Auth
+      summary: Remove phone number
+      description: Remove phone number from account (requires password confirmation)
+      operationId: removePhone
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPasswordRequest"
+      responses:
+        "200":
+          description: Phone number removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          description: Cannot remove - phone required for SMS MFA
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  # =============================================================================
+  # AUTH - Account Recovery (Unauthenticated)
+  # =============================================================================
+
+  /v1/auth/recovery/start:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Start account recovery
+      description: Initiate account recovery process via email or phone
+      operationId: startAccountRecovery
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StartRecoveryRequest"
+      responses:
+        "202":
+          description: Recovery initiated if account exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryStartedResponse"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/recovery/verify:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Verify recovery code
+      description: Verify OTP sent via email or SMS for account recovery
+      operationId: verifyRecoveryCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyRecoveryRequest"
+      responses:
+        "200":
+          description: Code verified, returns recovery token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RecoveryVerifiedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired code
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/auth/recovery/reset-mfa:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Reset MFA during recovery
+      description: Disable all MFA methods using recovery token (after verification)
+      operationId: resetMfaDuringRecovery
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetMfaRequest"
+      responses:
+        "200":
+          description: MFA reset, user can now login
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired recovery token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /v1/auth/recovery/resend:
+    post:
+      tags:
+        - Auth - Recovery
+      summary: Resend recovery code
+      description: Resend OTP for account recovery
+      operationId: resendRecoveryCode
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResendRecoveryRequest"
+      responses:
+        "200":
+          description: Code resent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  # =============================================================================
+  # AUTH - Account Deletion
+  # =============================================================================
+
+  /v1/auth/account/delete:
+    post:
+      tags:
+        - Auth
+      summary: Request account deletion
+      description: Initiate account deletion - sends confirmation email
+      operationId: requestAccountDeletion
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmPasswordRequest"
+      responses:
+        "202":
+          description: Deletion confirmation email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /v1/auth/account/delete/confirm:
+    post:
+      tags:
+        - Auth
+      summary: Confirm account deletion
+      description: Complete account deletion with confirmation token
+      operationId: confirmAccountDeletion
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmDeletionRequest"
+      responses:
+        "200":
+          description: Account deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
 
 components:
   schemas:
     # =========================================================================
     # Common Schemas
     # =========================================================================
+
+    ErrorCode:
+      type: string
+      description: |
+        Standardized error codes for the API. Frontend should handle these codes
+        to display appropriate messages and take corrective actions.
+      enum:
+        # Validation & Request Errors (4xx)
+        - VALIDATION_ERROR        # Request body/params failed validation
+        - INVALID_REQUEST         # Malformed request
+        - MISSING_FIELD           # Required field not provided
+        - INVALID_FORMAT          # Field format invalid (email, phone, etc.)
+
+        # Authentication Errors
+        - UNAUTHORIZED            # No valid auth token provided
+        - INVALID_CREDENTIALS     # Wrong email/password
+        - INVALID_TOKEN           # Token malformed or signature invalid
+        - TOKEN_EXPIRED           # Token has expired
+        - SESSION_EXPIRED         # User session has expired
+        - REFRESH_TOKEN_INVALID   # Refresh token invalid or revoked
+        - REFRESH_TOKEN_EXPIRED   # Refresh token has expired
+
+        # Account State Errors
+        - ACCOUNT_LOCKED          # Too many failed attempts, temporarily locked
+        - ACCOUNT_DISABLED        # Account has been disabled by admin
+        - ACCOUNT_NOT_VERIFIED    # Email not verified yet
+        - ACCOUNT_DELETED         # Account has been deleted
+
+        # MFA Errors
+        - MFA_REQUIRED            # MFA challenge required to complete login
+        - MFA_INVALID_CODE        # Wrong MFA code provided
+        - MFA_CODE_EXPIRED        # MFA code has expired
+        - MFA_NOT_ENABLED         # Trying to use MFA when not enabled
+        - MFA_ALREADY_ENABLED     # Trying to enable MFA when already active
+        - TOTP_SETUP_REQUIRED     # Must complete TOTP setup first
+        - RECOVERY_CODE_INVALID   # Invalid recovery code
+        - RECOVERY_CODE_USED      # Recovery code already used
+        - NO_RECOVERY_CODES       # No recovery codes remaining
+
+        # Registration & Uniqueness Errors
+        - EMAIL_ALREADY_EXISTS    # Email already registered
+        - PHONE_ALREADY_EXISTS    # Phone number already registered
+        - USERNAME_ALREADY_EXISTS # Username taken (if applicable)
+
+        # Password Errors
+        - PASSWORD_TOO_WEAK       # Password doesn't meet requirements
+        - PASSWORD_INCORRECT      # Current password wrong (for changes)
+        - PASSWORD_SAME_AS_OLD    # New password same as current
+        - PASSWORD_RESET_EXPIRED  # Password reset token expired
+        - PASSWORD_RESET_INVALID  # Password reset token invalid
+
+        # OAuth Errors
+        - OAUTH_ERROR             # Generic OAuth flow error
+        - OAUTH_STATE_MISMATCH    # CSRF state parameter mismatch
+        - OAUTH_CODE_INVALID      # Authorization code invalid/expired
+        - OAUTH_ACCOUNT_EXISTS    # OAuth email already linked to another account
+        - OAUTH_NOT_LINKED        # Trying to unlink provider that's not linked
+        - OAUTH_LAST_METHOD       # Can't unlink - would leave no login method
+
+        # Passkey Errors
+        - PASSKEY_REGISTRATION_FAILED  # WebAuthn registration failed
+        - PASSKEY_AUTH_FAILED          # WebAuthn authentication failed
+        - PASSKEY_NOT_FOUND            # Passkey doesn't exist
+        - PASSKEY_LAST_METHOD          # Can't delete - would leave no login method
+
+        # Recovery Errors
+        - RECOVERY_SESSION_EXPIRED     # Recovery session timed out
+        - RECOVERY_CODE_INVALID        # Wrong recovery verification code
+        - RECOVERY_NOT_ALLOWED         # Account doesn't support this recovery method
+
+        # Rate Limiting
+        - RATE_LIMITED            # Too many requests
+
+        # Resource Errors
+        - NOT_FOUND               # Resource not found
+        - CONFLICT                # Resource conflict (already exists)
+        - FORBIDDEN               # No permission for this action
+
+        # Server Errors
+        - INTERNAL_ERROR          # Unexpected server error
+        - SERVICE_UNAVAILABLE     # Dependent service down
+
     Error:
       type: object
       required:
@@ -130,22 +1782,135 @@ components:
         - message
       properties:
         code:
-          type: string
-          description: Machine-readable error code
-          example: VALIDATION_ERROR
+          $ref: "#/components/schemas/ErrorCode"
         message:
           type: string
-          description: Human-readable error message
+          description: Human-readable error message (can be shown to user)
           example: Invalid request parameters
         details:
           type: object
           additionalProperties: true
-          description: Additional error details
+          description: |
+            Additional error context. Structure varies by error type:
+            - VALIDATION_ERROR: { "field_name": "error message", ... }
+            - PASSWORD_TOO_WEAK: { "requirements": ["min 8 chars", "1 uppercase", ...] }
+            - ACCOUNT_LOCKED: { "locked_until": "2024-01-15T10:30:00Z", "attempts_remaining": 0 }
+            - RATE_LIMITED: { "retry_after": 60, "limit": 100, "window": "1h" }
+            - MFA_REQUIRED: { "challenge_token": "...", "methods": ["totp", "sms"] }
+          example:
+            email: must be a valid email address
         request_id:
           type: string
           format: uuid
-          description: Request ID for tracing
+          description: Request ID for tracing (include in bug reports)
           example: 550e8400-e29b-41d4-a716-446655440000
+
+    # =========================================================================
+    # Auth Configuration (for frontend reference)
+    # =========================================================================
+
+    AuthConfig:
+      type: object
+      description: |
+        Authentication configuration constants. These values are for frontend
+        reference and may be returned by a /v1/auth/config endpoint in the future.
+      properties:
+        password_requirements:
+          type: object
+          properties:
+            min_length:
+              type: integer
+              example: 8
+            max_length:
+              type: integer
+              example: 128
+            require_uppercase:
+              type: boolean
+              example: true
+            require_lowercase:
+              type: boolean
+              example: true
+            require_number:
+              type: boolean
+              example: true
+            require_special:
+              type: boolean
+              example: false
+        token_expiration:
+          type: object
+          properties:
+            access_token_seconds:
+              type: integer
+              description: Access token lifetime
+              example: 900
+            refresh_token_seconds:
+              type: integer
+              description: Refresh token lifetime (remember_me=false)
+              example: 86400
+            refresh_token_remember_seconds:
+              type: integer
+              description: Refresh token lifetime (remember_me=true)
+              example: 2592000
+            password_reset_seconds:
+              type: integer
+              description: Password reset token lifetime
+              example: 3600
+            email_verification_seconds:
+              type: integer
+              description: Email verification token lifetime
+              example: 86400
+            mfa_code_seconds:
+              type: integer
+              description: MFA OTP code lifetime
+              example: 300
+            recovery_session_seconds:
+              type: integer
+              description: Account recovery session lifetime
+              example: 900
+        rate_limits:
+          type: object
+          properties:
+            login_attempts:
+              type: object
+              properties:
+                max_attempts:
+                  type: integer
+                  example: 5
+                window_seconds:
+                  type: integer
+                  example: 900
+                lockout_seconds:
+                  type: integer
+                  example: 900
+            password_reset_requests:
+              type: object
+              properties:
+                max_requests:
+                  type: integer
+                  example: 3
+                window_seconds:
+                  type: integer
+                  example: 3600
+            mfa_attempts:
+              type: object
+              properties:
+                max_attempts:
+                  type: integer
+                  example: 5
+                window_seconds:
+                  type: integer
+                  example: 300
+        recovery_codes:
+          type: object
+          properties:
+            count:
+              type: integer
+              description: Number of recovery codes generated
+              example: 10
+            format:
+              type: string
+              description: Recovery code format
+              example: "XXXX-XXXX"
 
     HealthStatus:
       type: object
@@ -193,36 +1958,1278 @@ components:
           example: 8
 
     # =========================================================================
-    # Domain Schemas - Add your domain models here
+    # Auth - Core Schemas
     # =========================================================================
 
-    # Example User schema (uncomment when ready)
-    # User:
-    #   type: object
-    #   required:
-    #     - id
-    #     - email
-    #     - created_at
-    #   properties:
-    #     id:
-    #       type: string
-    #       format: uuid
-    #       example: 550e8400-e29b-41d4-a716-446655440000
-    #     email:
-    #       type: string
-    #       format: email
-    #       example: user@example.com
-    #     name:
-    #       type: string
-    #       example: John Doe
-    #     created_at:
-    #       type: string
-    #       format: date-time
-    #       example: 2024-01-15T10:30:00Z
-    #     updated_at:
-    #       type: string
-    #       format: date-time
-    #       example: 2024-01-15T10:30:00Z
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - email_verified
+        - created_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        name:
+          type: string
+          example: John Doe
+        avatar_url:
+          type: string
+          format: uri
+          example: https://example.com/avatar.jpg
+        email_verified:
+          type: boolean
+          example: true
+        phone_number:
+          type: string
+          example: "+1234567890"
+        phone_verified:
+          type: boolean
+          example: false
+        mfa_enabled:
+          type: boolean
+          example: false
+        created_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        updated_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: SecureP@ss123
+        name:
+          type: string
+          example: John Doe
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: SecureP@ss123
+        remember_me:
+          type: boolean
+          default: false
+          description: Extend session duration
+
+    AuthResponse:
+      type: object
+      required:
+        - user
+        - access_token
+        - refresh_token
+        - expires_in
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        access_token:
+          type: string
+          description: JWT access token
+          example: eyJhbGciOiJSUzI1NiIs...
+        refresh_token:
+          type: string
+          description: Refresh token for obtaining new access tokens
+          example: dGhpcy1pcy1hLXJlZnJlc2g...
+        expires_in:
+          type: integer
+          description: Access token expiration in seconds
+          example: 3600
+        token_type:
+          type: string
+          default: Bearer
+          example: Bearer
+
+    TokenResponse:
+      type: object
+      required:
+        - access_token
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJSUzI1NiIs...
+        refresh_token:
+          type: string
+          example: dGhpcy1pcy1hLXJlZnJlc2g...
+        expires_in:
+          type: integer
+          example: 3600
+        token_type:
+          type: string
+          default: Bearer
+
+    RefreshRequest:
+      type: object
+      required:
+        - refresh_token
+      properties:
+        refresh_token:
+          type: string
+          example: dGhpcy1pcy1hLXJlZnJlc2g...
+
+    LogoutRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: Optional refresh token to invalidate
+        all_sessions:
+          type: boolean
+          default: false
+          description: Logout from all devices
+
+    LoginChallenge:
+      type: object
+      required:
+        - challenge_type
+        - challenge_token
+      properties:
+        challenge_type:
+          type: string
+          enum: [mfa_required, account_locked, email_verification_required]
+          example: mfa_required
+        challenge_token:
+          type: string
+          description: Token to continue authentication flow
+          example: chg_abc123...
+        available_methods:
+          type: array
+          items:
+            type: string
+            enum: [totp, sms, recovery_code]
+          example: [totp, sms]
+        locked_until:
+          type: string
+          format: date-time
+          description: When account lockout expires (if locked)
+        message:
+          type: string
+          example: Multi-factor authentication required
+
+    MessageResponse:
+      type: object
+      required:
+        - message
+      properties:
+        message:
+          type: string
+          example: Operation completed successfully
+
+    # =========================================================================
+    # Auth - OAuth Schemas
+    # =========================================================================
+
+    OAuthProvider:
+      type: string
+      enum: [google, apple, facebook, github]
+      example: google
+
+    OAuthCallbackRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          description: Authorization code from OAuth provider
+        state:
+          type: string
+          description: CSRF state parameter
+        redirect_uri:
+          type: string
+          format: uri
+
+    OAuthConnection:
+      type: object
+      required:
+        - provider
+        - provider_user_id
+        - connected_at
+      properties:
+        provider:
+          $ref: "#/components/schemas/OAuthProvider"
+        provider_user_id:
+          type: string
+          example: "12345678"
+        email:
+          type: string
+          format: email
+          example: user@gmail.com
+        name:
+          type: string
+          example: John Doe
+        avatar_url:
+          type: string
+          format: uri
+        connected_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+
+    OAuthConnectionList:
+      type: object
+      required:
+        - connections
+      properties:
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/OAuthConnection"
+
+    # =========================================================================
+    # Auth - Password Schemas
+    # =========================================================================
+
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - token
+        - password
+      properties:
+        token:
+          type: string
+          description: Password reset token from email
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: NewSecureP@ss123
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - current_password
+        - new_password
+      properties:
+        current_password:
+          type: string
+          format: password
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+
+    ValidatePasswordRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          format: password
+
+    PasswordValidationResult:
+      type: object
+      required:
+        - valid
+        - score
+      properties:
+        valid:
+          type: boolean
+          example: true
+        score:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: Password strength score (0-4)
+          example: 3
+        feedback:
+          type: array
+          items:
+            type: string
+          example: ["Add a number", "Add a special character"]
+
+    ConfirmPasswordRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          format: password
+          description: Current password for confirmation
+
+    # =========================================================================
+    # Auth - MFA Schemas
+    # =========================================================================
+
+    MfaStatus:
+      type: object
+      required:
+        - mfa_enabled
+      properties:
+        mfa_enabled:
+          type: boolean
+          example: true
+        totp_enabled:
+          type: boolean
+          example: true
+        sms_enabled:
+          type: boolean
+          example: false
+        recovery_codes_remaining:
+          type: integer
+          example: 8
+        phone_number_masked:
+          type: string
+          example: "+1***456"
+
+    TotpSetupResponse:
+      type: object
+      required:
+        - secret
+        - qr_code_uri
+        - otpauth_uri
+      properties:
+        secret:
+          type: string
+          description: Base32 encoded TOTP secret
+          example: JBSWY3DPEHPK3PXP
+        qr_code_uri:
+          type: string
+          format: uri
+          description: Data URI for QR code image
+        otpauth_uri:
+          type: string
+          description: otpauth:// URI for authenticator apps
+          example: otpauth://totp/Thiam:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Thiam
+
+    TotpVerifyRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          example: "123456"
+
+    MfaEnabledResponse:
+      type: object
+      required:
+        - message
+        - recovery_codes
+      properties:
+        message:
+          type: string
+          example: MFA enabled successfully
+        recovery_codes:
+          type: array
+          items:
+            type: string
+          description: One-time use recovery codes
+          example: ["ABCD-1234", "EFGH-5678", "IJKL-9012"]
+
+    DisableMfaRequest:
+      type: object
+      required:
+        - password
+      properties:
+        password:
+          type: string
+          format: password
+          description: Current password for confirmation
+
+    SmsSetupRequest:
+      type: object
+      required:
+        - phone_number
+      properties:
+        phone_number:
+          type: string
+          pattern: "^\\+[1-9]\\d{1,14}$"
+          description: E.164 format phone number
+          example: "+14155551234"
+
+    SmsVerifyRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          example: "123456"
+
+    MfaChallengeRequest:
+      type: object
+      required:
+        - challenge_token
+        - code
+      properties:
+        challenge_token:
+          type: string
+          description: Challenge token from login response
+        code:
+          type: string
+          description: TOTP code, SMS OTP, or recovery code
+          example: "123456"
+        method:
+          type: string
+          enum: [totp, sms, recovery_code]
+          default: totp
+
+    SendMfaCodeRequest:
+      type: object
+      required:
+        - challenge_token
+      properties:
+        challenge_token:
+          type: string
+          description: Challenge token from login response
+        method:
+          type: string
+          enum: [sms]
+          default: sms
+
+    # =========================================================================
+    # Auth - Passkey Schemas (WebAuthn)
+    # =========================================================================
+
+    Passkey:
+      type: object
+      required:
+        - id
+        - name
+        - created_at
+        - last_used_at
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        name:
+          type: string
+          example: MacBook Pro Touch ID
+        credential_id:
+          type: string
+          description: Base64URL encoded credential ID
+        aaguid:
+          type: string
+          description: Authenticator attestation GUID
+        created_at:
+          type: string
+          format: date-time
+        last_used_at:
+          type: string
+          format: date-time
+        device_type:
+          type: string
+          enum: [platform, cross_platform]
+          example: platform
+        backed_up:
+          type: boolean
+          description: Whether credential is backed up (e.g., iCloud Keychain)
+
+    PasskeyList:
+      type: object
+      required:
+        - passkeys
+      properties:
+        passkeys:
+          type: array
+          items:
+            $ref: "#/components/schemas/Passkey"
+
+    PasskeyRegistrationOptions:
+      type: object
+      description: WebAuthn PublicKeyCredentialCreationOptions
+      required:
+        - challenge
+        - rp
+        - user
+        - pub_key_cred_params
+      properties:
+        challenge:
+          type: string
+          description: Base64URL encoded challenge
+        rp:
+          type: object
+          properties:
+            id:
+              type: string
+              example: thiam.app
+            name:
+              type: string
+              example: Thiam
+        user:
+          type: object
+          properties:
+            id:
+              type: string
+              description: Base64URL encoded user ID
+            name:
+              type: string
+            display_name:
+              type: string
+        pub_key_cred_params:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              alg:
+                type: integer
+        timeout:
+          type: integer
+          example: 60000
+        authenticator_selection:
+          type: object
+          properties:
+            authenticator_attachment:
+              type: string
+              enum: [platform, cross-platform]
+            resident_key:
+              type: string
+              enum: [required, preferred, discouraged]
+            user_verification:
+              type: string
+              enum: [required, preferred, discouraged]
+        attestation:
+          type: string
+          enum: [none, indirect, direct, enterprise]
+        exclude_credentials:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              id:
+                type: string
+              transports:
+                type: array
+                items:
+                  type: string
+
+    PasskeyRegistrationResponse:
+      type: object
+      description: WebAuthn registration response from authenticator
+      required:
+        - id
+        - raw_id
+        - response
+        - type
+      properties:
+        id:
+          type: string
+          description: Base64URL encoded credential ID
+        raw_id:
+          type: string
+          description: Base64URL encoded raw credential ID
+        response:
+          type: object
+          required:
+            - attestation_object
+            - client_data_json
+          properties:
+            attestation_object:
+              type: string
+              description: Base64URL encoded attestation object
+            client_data_json:
+              type: string
+              description: Base64URL encoded client data
+            transports:
+              type: array
+              items:
+                type: string
+                enum: [usb, nfc, ble, internal, hybrid]
+        type:
+          type: string
+          enum: [public-key]
+        name:
+          type: string
+          description: User-friendly name for the passkey
+          example: MacBook Pro Touch ID
+
+    PasskeyAuthStartRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          description: Optional email for non-discoverable credentials
+
+    PasskeyAuthenticationOptions:
+      type: object
+      description: WebAuthn PublicKeyCredentialRequestOptions
+      required:
+        - challenge
+      properties:
+        challenge:
+          type: string
+          description: Base64URL encoded challenge
+        timeout:
+          type: integer
+          example: 60000
+        rp_id:
+          type: string
+          example: thiam.app
+        allow_credentials:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+              id:
+                type: string
+              transports:
+                type: array
+                items:
+                  type: string
+        user_verification:
+          type: string
+          enum: [required, preferred, discouraged]
+
+    PasskeyAuthenticationResponse:
+      type: object
+      description: WebAuthn authentication response from authenticator
+      required:
+        - id
+        - raw_id
+        - response
+        - type
+      properties:
+        id:
+          type: string
+        raw_id:
+          type: string
+        response:
+          type: object
+          required:
+            - authenticator_data
+            - client_data_json
+            - signature
+          properties:
+            authenticator_data:
+              type: string
+              description: Base64URL encoded authenticator data
+            client_data_json:
+              type: string
+              description: Base64URL encoded client data
+            signature:
+              type: string
+              description: Base64URL encoded signature
+            user_handle:
+              type: string
+              description: Base64URL encoded user handle
+        type:
+          type: string
+          enum: [public-key]
+
+    UpdatePasskeyRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: Work Laptop
+
+    # =========================================================================
+    # Auth - Recovery Schemas
+    # =========================================================================
+
+    RecoveryCodesResponse:
+      type: object
+      required:
+        - codes
+      properties:
+        codes:
+          type: array
+          items:
+            type: string
+          description: List of recovery codes (show once, user must save)
+          example: ["ABCD-1234", "EFGH-5678", "IJKL-9012", "MNOP-3456"]
+
+    RecoveryCodesStatus:
+      type: object
+      required:
+        - total
+        - remaining
+      properties:
+        total:
+          type: integer
+          example: 10
+        remaining:
+          type: integer
+          example: 8
+        generated_at:
+          type: string
+          format: date-time
+
+    UseRecoveryCodeRequest:
+      type: object
+      required:
+        - email
+        - code
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          description: Recovery code
+          example: ABCD-1234
+
+    # =========================================================================
+    # Auth - Session Schemas
+    # =========================================================================
+
+    Session:
+      type: object
+      required:
+        - id
+        - created_at
+        - last_active_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        user_agent:
+          type: string
+          example: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+        ip_address:
+          type: string
+          example: 192.168.1.1
+        location:
+          type: string
+          example: San Francisco, CA, US
+        device_type:
+          type: string
+          enum: [desktop, mobile, tablet, unknown]
+        is_current:
+          type: boolean
+          description: Whether this is the current session
+        created_at:
+          type: string
+          format: date-time
+        last_active_at:
+          type: string
+          format: date-time
+
+    SessionList:
+      type: object
+      required:
+        - sessions
+      properties:
+        sessions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Session"
+
+    VerifyEmailRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Email verification token
+
+    # =========================================================================
+    # Auth - Magic Link Schemas
+    # =========================================================================
+
+    SendMagicLinkRequest:
+      type: object
+      required:
+        - identifier
+        - method
+      properties:
+        identifier:
+          type: string
+          description: Email address or phone number
+          example: user@example.com
+        method:
+          type: string
+          enum: [email, sms]
+          description: Delivery method for magic link
+          example: email
+
+    MagicLinkSentResponse:
+      type: object
+      required:
+        - message
+        - session_id
+        - expires_at
+      properties:
+        message:
+          type: string
+          example: Magic link sent to your email
+        session_id:
+          type: string
+          description: Session ID for verification/resend
+          example: ml_abc123...
+        masked_destination:
+          type: string
+          description: Masked email or phone where link was sent
+          example: j***n@example.com
+        expires_at:
+          type: string
+          format: date-time
+          description: When the magic link expires
+        method:
+          type: string
+          enum: [email, sms]
+          description: Method used to send magic link
+
+    VerifyMagicLinkRequest:
+      type: object
+      required:
+        - session_id
+      properties:
+        session_id:
+          type: string
+          description: Session ID from send response
+        token:
+          type: string
+          description: Token from magic link URL (for email)
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: OTP code (for SMS)
+          example: "123456"
+
+    ResendMagicLinkRequest:
+      type: object
+      required:
+        - session_id
+      properties:
+        session_id:
+          type: string
+          description: Session ID from original send response
+        method:
+          type: string
+          enum: [email, sms]
+          description: Optionally change delivery method
+
+    # =========================================================================
+    # Auth - Security Audit Log Schemas
+    # =========================================================================
+
+    SecurityEventType:
+      type: string
+      description: Type of security event
+      enum:
+        # Authentication events
+        - login_success
+        - login_failed
+        - logout
+        - magic_link_sent
+        - magic_link_used
+
+        # Password events
+        - password_changed
+        - password_reset_requested
+        - password_reset_completed
+
+        # MFA events
+        - mfa_enabled
+        - mfa_disabled
+        - mfa_challenge_success
+        - mfa_challenge_failed
+        - recovery_code_used
+        - recovery_codes_regenerated
+
+        # Passkey events
+        - passkey_registered
+        - passkey_removed
+        - passkey_used
+
+        # OAuth events
+        - oauth_linked
+        - oauth_unlinked
+        - oauth_login
+
+        # Account events
+        - email_changed
+        - phone_changed
+        - profile_updated
+        - account_locked
+        - account_unlocked
+        - account_deletion_requested
+        - account_deleted
+
+        # Session events
+        - session_revoked
+        - all_sessions_revoked
+
+        # Security events
+        - suspicious_activity
+        - new_device_login
+
+    SecurityEvent:
+      type: object
+      required:
+        - id
+        - event_type
+        - timestamp
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 550e8400-e29b-41d4-a716-446655440000
+        event_type:
+          $ref: "#/components/schemas/SecurityEventType"
+        timestamp:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        ip_address:
+          type: string
+          example: 192.168.1.1
+        user_agent:
+          type: string
+          example: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)
+        location:
+          type: object
+          properties:
+            city:
+              type: string
+              example: San Francisco
+            region:
+              type: string
+              example: CA
+            country:
+              type: string
+              example: US
+            country_code:
+              type: string
+              example: US
+        device:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [desktop, mobile, tablet, unknown]
+            os:
+              type: string
+              example: macOS 14.0
+            browser:
+              type: string
+              example: Chrome 120
+        details:
+          type: object
+          additionalProperties: true
+          description: |
+            Additional event-specific details:
+            - login_failed: { "reason": "invalid_password", "attempts": 3 }
+            - mfa_enabled: { "method": "totp" }
+            - oauth_linked: { "provider": "google" }
+            - new_device_login: { "is_new_device": true }
+          example:
+            reason: invalid_password
+            attempts: 3
+        success:
+          type: boolean
+          description: Whether the action was successful
+          example: true
+        risk_level:
+          type: string
+          enum: [low, medium, high]
+          description: Risk assessment of the event
+          example: low
+
+    SecurityEventList:
+      type: object
+      required:
+        - events
+        - pagination
+      properties:
+        events:
+          type: array
+          items:
+            $ref: "#/components/schemas/SecurityEvent"
+        pagination:
+          $ref: "#/components/schemas/Pagination"
+
+    # =========================================================================
+    # Auth - Availability Check Schemas
+    # =========================================================================
+
+    CheckEmailRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+
+    CheckPhoneRequest:
+      type: object
+      required:
+        - phone_number
+      properties:
+        phone_number:
+          type: string
+          pattern: "^\\+[1-9]\\d{1,14}$"
+          description: E.164 format phone number
+          example: "+14155551234"
+
+    AvailabilityResponse:
+      type: object
+      required:
+        - available
+      properties:
+        available:
+          type: boolean
+          description: Whether the email/phone is available for registration
+          example: true
+        message:
+          type: string
+          description: Human-readable message
+          example: Email is available
+        suggestions:
+          type: array
+          items:
+            type: string
+          description: Alternative suggestions if not available (for usernames)
+
+    # =========================================================================
+    # Auth - Profile Management Schemas
+    # =========================================================================
+
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          example: John Doe
+        avatar_url:
+          type: string
+          format: uri
+          example: https://example.com/avatar.jpg
+
+    ChangeEmailRequest:
+      type: object
+      required:
+        - new_email
+        - password
+      properties:
+        new_email:
+          type: string
+          format: email
+          example: newemail@example.com
+        password:
+          type: string
+          format: password
+          description: Current password for confirmation
+
+    ConfirmEmailChangeRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Email change verification token
+
+    ChangePhoneRequest:
+      type: object
+      required:
+        - new_phone_number
+        - password
+      properties:
+        new_phone_number:
+          type: string
+          pattern: "^\\+[1-9]\\d{1,14}$"
+          description: E.164 format phone number
+          example: "+14155551234"
+        password:
+          type: string
+          format: password
+          description: Current password for confirmation
+
+    ConfirmPhoneChangeRequest:
+      type: object
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: OTP sent to new phone number
+          example: "123456"
+
+    # =========================================================================
+    # Auth - Account Recovery Schemas
+    # =========================================================================
+
+    StartRecoveryRequest:
+      type: object
+      required:
+        - identifier
+        - method
+      properties:
+        identifier:
+          type: string
+          description: Email address or phone number
+          example: user@example.com
+        method:
+          type: string
+          enum: [email, sms]
+          description: Recovery method to use
+          example: email
+
+    RecoveryStartedResponse:
+      type: object
+      required:
+        - message
+        - recovery_session_id
+      properties:
+        message:
+          type: string
+          example: Recovery code sent if account exists
+        recovery_session_id:
+          type: string
+          description: Session ID for recovery flow
+          example: rec_abc123...
+        masked_destination:
+          type: string
+          description: Masked email or phone where code was sent
+          example: j***n@example.com
+        expires_at:
+          type: string
+          format: date-time
+          description: When the recovery session expires
+
+    VerifyRecoveryRequest:
+      type: object
+      required:
+        - recovery_session_id
+        - code
+      properties:
+        recovery_session_id:
+          type: string
+          description: Session ID from start recovery response
+        code:
+          type: string
+          pattern: "^[0-9]{6}$"
+          description: OTP code sent via email or SMS
+          example: "123456"
+
+    RecoveryVerifiedResponse:
+      type: object
+      required:
+        - recovery_token
+        - available_actions
+      properties:
+        recovery_token:
+          type: string
+          description: Token to perform recovery actions
+          example: rec_token_xyz...
+        available_actions:
+          type: array
+          items:
+            type: string
+            enum: [reset_password, reset_mfa, login]
+          description: Actions available with this recovery token
+          example: [reset_password, reset_mfa]
+        user_info:
+          type: object
+          properties:
+            email_masked:
+              type: string
+              example: j***n@example.com
+            mfa_enabled:
+              type: boolean
+              example: true
+            mfa_methods:
+              type: array
+              items:
+                type: string
+                enum: [totp, sms]
+              example: [totp]
+
+    ResetMfaRequest:
+      type: object
+      required:
+        - recovery_token
+      properties:
+        recovery_token:
+          type: string
+          description: Token from verified recovery
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+          description: Optional new password to set
+
+    ResendRecoveryRequest:
+      type: object
+      required:
+        - recovery_session_id
+      properties:
+        recovery_session_id:
+          type: string
+          description: Session ID from start recovery response
+
+    # =========================================================================
+    # Auth - Account Deletion Schemas
+    # =========================================================================
+
+    ConfirmDeletionRequest:
+      type: object
+      required:
+        - token
+      properties:
+        token:
+          type: string
+          description: Account deletion confirmation token
+        feedback:
+          type: string
+          maxLength: 1000
+          description: Optional feedback on why user is leaving
 
   parameters:
     PageParam:
@@ -316,6 +3323,35 @@ components:
             code: INTERNAL_ERROR
             message: An unexpected error occurred
             request_id: 550e8400-e29b-41d4-a716-446655440000
+
+    TooManyRequests:
+      description: Rate limit exceeded
+      headers:
+        Retry-After:
+          description: Seconds until rate limit resets
+          schema:
+            type: integer
+        X-RateLimit-Limit:
+          description: Request limit per window
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          description: Remaining requests in current window
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          description: Unix timestamp when rate limit resets
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+          example:
+            code: RATE_LIMITED
+            message: Too many requests, please try again later
+            details:
+              retry_after: 60
 
   securitySchemes:
     BearerAuth:
