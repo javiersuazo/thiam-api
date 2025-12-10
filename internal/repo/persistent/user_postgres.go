@@ -23,6 +23,10 @@ func NewUserRepo(pg *postgres.Postgres) *UserRepo {
 }
 
 func (r *UserRepo) Create(ctx context.Context, user *auth.User) error {
+	return r.CreateTx(ctx, r.Pool, user)
+}
+
+func (r *UserRepo) CreateTx(ctx context.Context, tx postgres.DBTX, user *auth.User) error {
 	now := time.Now().UTC()
 
 	if user.ID == uuid.Nil {
@@ -52,12 +56,12 @@ func (r *UserRepo) Create(ctx context.Context, user *auth.User) error {
 		).
 		ToSql()
 	if err != nil {
-		return fmt.Errorf("UserRepo.Create - r.Builder: %w", err)
+		return fmt.Errorf("UserRepo.CreateTx - r.Builder: %w", err)
 	}
 
-	_, err = r.Pool.Exec(ctx, sql, args...)
+	_, err = tx.Exec(ctx, sql, args...)
 	if err != nil {
-		return fmt.Errorf("UserRepo.Create - r.Pool.Exec: %w", err)
+		return fmt.Errorf("UserRepo.CreateTx - tx.Exec: %w", err)
 	}
 
 	return nil

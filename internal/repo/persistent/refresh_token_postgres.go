@@ -23,6 +23,10 @@ func NewRefreshTokenRepo(pg *postgres.Postgres) *RefreshTokenRepo {
 }
 
 func (r *RefreshTokenRepo) Create(ctx context.Context, token *auth.RefreshToken) error {
+	return r.CreateTx(ctx, r.Pool, token)
+}
+
+func (r *RefreshTokenRepo) CreateTx(ctx context.Context, tx postgres.DBTX, token *auth.RefreshToken) error {
 	now := time.Now().UTC()
 
 	if token.ID == uuid.Nil {
@@ -49,12 +53,12 @@ func (r *RefreshTokenRepo) Create(ctx context.Context, token *auth.RefreshToken)
 		).
 		ToSql()
 	if err != nil {
-		return fmt.Errorf("RefreshTokenRepo.Create - r.Builder: %w", err)
+		return fmt.Errorf("RefreshTokenRepo.CreateTx - r.Builder: %w", err)
 	}
 
-	_, err = r.Pool.Exec(ctx, sql, args...)
+	_, err = tx.Exec(ctx, sql, args...)
 	if err != nil {
-		return fmt.Errorf("RefreshTokenRepo.Create - r.Pool.Exec: %w", err)
+		return fmt.Errorf("RefreshTokenRepo.CreateTx - tx.Exec: %w", err)
 	}
 
 	return nil

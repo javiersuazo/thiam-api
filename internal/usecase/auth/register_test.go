@@ -9,7 +9,9 @@ import (
 	"github.com/evrone/go-clean-template/internal/entity/auth"
 	authuc "github.com/evrone/go-clean-template/internal/usecase/auth"
 	pkgauth "github.com/evrone/go-clean-template/pkg/auth"
+	"github.com/evrone/go-clean-template/pkg/postgres"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,6 +19,7 @@ var errRepo = errors.New("repository error")
 
 type mockUserRepo struct {
 	createFunc      func(ctx context.Context, user *auth.User) error
+	createTxFunc    func(ctx context.Context, tx postgres.DBTX, user *auth.User) error
 	getByIDFunc     func(ctx context.Context, id uuid.UUID) (*auth.User, error)
 	getByEmailFunc  func(ctx context.Context, email string) (*auth.User, error)
 	updateFunc      func(ctx context.Context, user *auth.User) error
@@ -29,6 +32,20 @@ func (m *mockUserRepo) Create(ctx context.Context, user *auth.User) error {
 
 	if m.createFunc != nil {
 		return m.createFunc(ctx, user)
+	}
+
+	user.ID = uuid.New()
+	user.CreatedAt = time.Now()
+	user.UpdatedAt = time.Now()
+
+	return nil
+}
+
+func (m *mockUserRepo) CreateTx(_ context.Context, _ postgres.DBTX, user *auth.User) error {
+	m.createdUser = user
+
+	if m.createTxFunc != nil {
+		return m.createTxFunc(context.Background(), nil, user)
 	}
 
 	user.ID = uuid.New()
@@ -72,6 +89,7 @@ func (m *mockUserRepo) ExistsByEmail(ctx context.Context, email string) (bool, e
 
 type mockRefreshTokenRepo struct {
 	createFunc         func(ctx context.Context, token *auth.RefreshToken) error
+	createTxFunc       func(ctx context.Context, tx postgres.DBTX, token *auth.RefreshToken) error
 	getByTokenHashFunc func(ctx context.Context, tokenHash string) (*auth.RefreshToken, error)
 	revokeFunc         func(ctx context.Context, id uuid.UUID) error
 	revokeByFamilyIDFn func(ctx context.Context, familyID uuid.UUID) error
@@ -83,6 +101,20 @@ func (m *mockRefreshTokenRepo) Create(ctx context.Context, token *auth.RefreshTo
 
 	if m.createFunc != nil {
 		return m.createFunc(ctx, token)
+	}
+
+	token.ID = uuid.New()
+	token.FamilyID = uuid.New()
+	token.CreatedAt = time.Now()
+
+	return nil
+}
+
+func (m *mockRefreshTokenRepo) CreateTx(_ context.Context, _ postgres.DBTX, token *auth.RefreshToken) error {
+	m.createdToken = token
+
+	if m.createTxFunc != nil {
+		return m.createTxFunc(context.Background(), nil, token)
 	}
 
 	token.ID = uuid.New()
@@ -114,6 +146,18 @@ func (m *mockRefreshTokenRepo) RevokeByFamilyID(ctx context.Context, familyID uu
 	}
 
 	return nil
+}
+
+type mockTxManager struct {
+	shouldFail bool
+}
+
+func (m *mockTxManager) WithTransaction(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {
+	if m.shouldFail {
+		return errRepo
+	}
+
+	return fn(ctx, nil)
 }
 
 func newTestJWTService(t *testing.T) *pkgauth.JWTService {
@@ -297,7 +341,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 				Password: "Password123!",
 			},
 			userRepo: &mockUserRepo{
-				createFunc: func(_ context.Context, _ *auth.User) error {
+				createTxFunc: func(_ context.Context, _ postgres.DBTX, _ *auth.User) error {
 					return errRepo
 				},
 			},
@@ -312,7 +356,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			},
 			userRepo: &mockUserRepo{},
 			refreshTokenRepo: &mockRefreshTokenRepo{
-				createFunc: func(_ context.Context, _ *auth.RefreshToken) error {
+				createTxFunc: func(_ context.Context, _ postgres.DBTX, _ *auth.RefreshToken) error {
 					return errRepo
 				},
 			},
@@ -325,7 +369,8 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			t.Parallel()
 
 			jwtService := newTestJWTService(t)
-			uc := authuc.NewRegisterUseCase(tt.userRepo, tt.refreshTokenRepo, jwtService)
+			txManager := &mockTxManager{}
+			uc := authuc.NewRegisterUseCase(tt.userRepo, tt.refreshTokenRepo, jwtService, txManager)
 
 			output, err := uc.Execute(context.Background(), tt.input)
 
@@ -352,8 +397,9 @@ func TestRegisterUseCase_PasswordHashing(t *testing.T) {
 	userRepo := &mockUserRepo{}
 	refreshTokenRepo := &mockRefreshTokenRepo{}
 	jwtService := newTestJWTService(t)
+	txManager := &mockTxManager{}
 
-	uc := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService)
+	uc := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService, txManager)
 
 	input := authuc.RegisterInput{
 		Email:    "test@example.com",
@@ -378,8 +424,9 @@ func TestRegisterUseCase_RefreshTokenCreation(t *testing.T) {
 	userRepo := &mockUserRepo{}
 	refreshTokenRepo := &mockRefreshTokenRepo{}
 	jwtService := newTestJWTService(t)
+	txManager := &mockTxManager{}
 
-	uc := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService)
+	uc := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService, txManager)
 
 	input := authuc.RegisterInput{
 		Email:    "test@example.com",
@@ -404,8 +451,9 @@ func TestRegisterUseCase_TokenValidation(t *testing.T) {
 	userRepo := &mockUserRepo{}
 	refreshTokenRepo := &mockRefreshTokenRepo{}
 	jwtService := newTestJWTService(t)
+	txManager := &mockTxManager{}
 
-	uc := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService)
+	uc := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService, txManager)
 
 	input := authuc.RegisterInput{
 		Email:    "test@example.com",

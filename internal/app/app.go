@@ -50,8 +50,11 @@ func Run(cfg *config.Config) { //nolint: funlen,gocritic,nolintlint,gocognit,goc
 		l.Fatal(fmt.Errorf("app - Run - auth.NewJWTService: %w", err))
 	}
 
+	// Transaction Manager
+	txManager := postgres.NewTxManager(pg)
+
 	// Auth Use Cases
-	registerUC := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService)
+	registerUC := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService, txManager)
 
 	// Outbox Worker
 	var (

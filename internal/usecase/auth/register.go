@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/evrone/go-clean-template/internal/entity/auth"
 	"github.com/evrone/go-clean-template/internal/repo"
 	pkgauth "github.com/evrone/go-clean-template/pkg/auth"
+	"github.com/jackc/pgx/v5"
 )
 
 // Registration validation errors.
@@ -30,11 +32,17 @@ const minPasswordLength = 8
 
 var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$`)
 
+// TxManager defines the interface for transaction management.
+type TxManager interface {
+	WithTransaction(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error
+}
+
 // RegisterUseCase handles user registration with email and password.
 type RegisterUseCase struct {
 	userRepo         repo.UserRepo
 	refreshTokenRepo repo.RefreshTokenRepo
 	jwtService       *pkgauth.JWTService
+	txManager        TxManager
 }
 
 // NewRegisterUseCase creates a new RegisterUseCase with the required dependencies.
@@ -42,11 +50,13 @@ func NewRegisterUseCase(
 	userRepo repo.UserRepo,
 	refreshTokenRepo repo.RefreshTokenRepo,
 	jwtService *pkgauth.JWTService,
+	txManager TxManager,
 ) *RegisterUseCase {
 	return &RegisterUseCase{
 		userRepo:         userRepo,
 		refreshTokenRepo: refreshTokenRepo,
 		jwtService:       jwtService,
+		txManager:        txManager,
 	}
 }
 
@@ -65,7 +75,9 @@ type RegisterOutput struct {
 
 // Execute registers a new user with the provided email and password.
 // It normalizes the email, validates input, hashes the password, creates the user,
-// and generates authentication tokens.
+// and generates authentication tokens. User and token creation are wrapped in a transaction.
+//
+//nolint:funlen // transaction logic adds necessary complexity
 func (uc *RegisterUseCase) Execute(ctx context.Context, input RegisterInput) (*RegisterOutput, error) {
 	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
 
@@ -98,24 +110,35 @@ func (uc *RegisterUseCase) Execute(ctx context.Context, input RegisterInput) (*R
 		user.Name = &name
 	}
 
-	if err := uc.userRepo.Create(ctx, user); err != nil {
-		return nil, fmt.Errorf("RegisterUseCase.Execute - creating user: %w", err)
-	}
+	var tokenPair *pkgauth.TokenPair
 
-	tokenPair, refreshExpiresAt, err := uc.jwtService.GenerateTokenPair(user.ID, user.Email)
+	err = uc.txManager.WithTransaction(ctx, func(ctx context.Context, tx pgx.Tx) error {
+		if err := uc.userRepo.CreateTx(ctx, tx, user); err != nil {
+			return fmt.Errorf("creating user: %w", err)
+		}
+
+		var refreshExpiresAt time.Time
+
+		tokenPair, refreshExpiresAt, err = uc.jwtService.GenerateTokenPair(user.ID, user.Email)
+		if err != nil {
+			return fmt.Errorf("generating tokens: %w", err)
+		}
+
+		refreshToken := &auth.RefreshToken{
+			UserID:     user.ID,
+			TokenHash:  pkgauth.HashToken(tokenPair.RefreshToken),
+			Generation: 1,
+			ExpiresAt:  refreshExpiresAt,
+		}
+
+		if err := uc.refreshTokenRepo.CreateTx(ctx, tx, refreshToken); err != nil {
+			return fmt.Errorf("storing refresh token: %w", err)
+		}
+
+		return nil
+	})
 	if err != nil {
-		return nil, fmt.Errorf("RegisterUseCase.Execute - generating tokens: %w", err)
-	}
-
-	refreshToken := &auth.RefreshToken{
-		UserID:     user.ID,
-		TokenHash:  pkgauth.HashToken(tokenPair.RefreshToken),
-		Generation: 1,
-		ExpiresAt:  refreshExpiresAt,
-	}
-
-	if err := uc.refreshTokenRepo.Create(ctx, refreshToken); err != nil {
-		return nil, fmt.Errorf("RegisterUseCase.Execute - storing refresh token: %w", err)
+		return nil, fmt.Errorf("RegisterUseCase.Execute - transaction: %w", err)
 	}
 
 	return &RegisterOutput{

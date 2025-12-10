@@ -15,8 +15,10 @@ import (
 	"github.com/evrone/go-clean-template/internal/entity/auth"
 	authuc "github.com/evrone/go-clean-template/internal/usecase/auth"
 	pkgauth "github.com/evrone/go-clean-template/pkg/auth"
+	"github.com/evrone/go-clean-template/pkg/postgres"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -30,6 +32,18 @@ type testUserRepo struct {
 }
 
 func (r *testUserRepo) Create(_ context.Context, user *auth.User) error {
+	if r.createErr != nil {
+		return r.createErr
+	}
+
+	user.ID = uuid.New()
+	user.CreatedAt = time.Now()
+	user.UpdatedAt = time.Now()
+
+	return nil
+}
+
+func (r *testUserRepo) CreateTx(_ context.Context, _ postgres.DBTX, user *auth.User) error {
 	if r.createErr != nil {
 		return r.createErr
 	}
@@ -71,6 +85,14 @@ func (r *testRefreshTokenRepo) Create(_ context.Context, token *auth.RefreshToke
 	return nil
 }
 
+func (r *testRefreshTokenRepo) CreateTx(_ context.Context, _ postgres.DBTX, token *auth.RefreshToken) error {
+	token.ID = uuid.New()
+	token.FamilyID = uuid.New()
+	token.CreatedAt = time.Now()
+
+	return nil
+}
+
 func (r *testRefreshTokenRepo) GetByTokenHash(_ context.Context, _ string) (*auth.RefreshToken, error) {
 	return nil, nil
 }
@@ -83,6 +105,12 @@ func (r *testRefreshTokenRepo) RevokeByFamilyID(_ context.Context, _ uuid.UUID) 
 	return nil
 }
 
+type testTxManager struct{}
+
+func (m *testTxManager) WithTransaction(ctx context.Context, fn func(ctx context.Context, tx pgx.Tx) error) error {
+	return fn(ctx, nil)
+}
+
 func newTestApp(t *testing.T, userRepo *testUserRepo) *fiber.App {
 	t.Helper()
 
@@ -91,7 +119,8 @@ func newTestApp(t *testing.T, userRepo *testUserRepo) *fiber.App {
 	})
 	require.NoError(t, err)
 
-	uc := authuc.NewRegisterUseCase(userRepo, &testRefreshTokenRepo{}, jwtService)
+	txManager := &testTxManager{}
+	uc := authuc.NewRegisterUseCase(userRepo, &testRefreshTokenRepo{}, jwtService, txManager)
 
 	app := fiber.New()
 	group := app.Group("/v1")
