@@ -231,11 +231,12 @@ CREATE TABLE IF NOT EXISTS passkeys (
     last_used_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT passkeys_credential_unique UNIQUE (credential_id)
+    CONSTRAINT passkeys_credential_unique UNIQUE (credential_id),
+    CONSTRAINT passkeys_credential_length CHECK (octet_length(credential_id) <= 1023),
+    CONSTRAINT passkeys_sign_count_check CHECK (sign_count >= 0)
 );
 
 CREATE INDEX idx_passkeys_user_id ON passkeys(user_id);
-CREATE INDEX idx_passkeys_credential ON passkeys(credential_id);
 
 -- =============================================================================
 -- MAGIC_LINK_SESSIONS - Passwordless login sessions
@@ -349,11 +350,12 @@ CREATE TABLE IF NOT EXISTS account_recovery_sessions (
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT recovery_sessions_method_check CHECK (method IN ('email', 'sms'))
+    CONSTRAINT recovery_sessions_method_check CHECK (method IN ('email', 'sms')),
+    CONSTRAINT recovery_sessions_auth_check CHECK (otp_hash IS NOT NULL OR recovery_token_hash IS NOT NULL)
 );
 
 CREATE INDEX idx_recovery_sessions_identifier ON account_recovery_sessions(identifier, method) WHERE completed_at IS NULL;
-CREATE INDEX idx_recovery_sessions_recovery_token ON account_recovery_sessions(recovery_token_hash) WHERE completed_at IS NULL;
+CREATE INDEX idx_recovery_sessions_recovery_token ON account_recovery_sessions(recovery_token_hash) WHERE completed_at IS NULL AND recovery_token_hash IS NOT NULL;
 
 -- =============================================================================
 -- EMAIL_CHANGE_REQUESTS - Email change verification
