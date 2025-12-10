@@ -14,6 +14,7 @@ var (
 	ErrExpiredToken      = errors.New("token has expired")
 	ErrInvalidClaims     = errors.New("invalid token claims")
 	ErrMissingSecret     = errors.New("jwt secret is required")
+	ErrSecretTooShort    = errors.New("jwt secret must be at least 32 characters for HS256")
 	ErrUnexpectedSigning = errors.New("unexpected signing method")
 )
 
@@ -28,6 +29,7 @@ const (
 	defaultAccessDuration  = 15 * time.Minute
 	defaultRefreshDuration = 7 * 24 * time.Hour
 	defaultIssuer          = "thiam"
+	minSecretLength        = 32
 )
 
 type Claims struct {
@@ -58,6 +60,10 @@ type JWTService struct {
 func NewJWTService(config JWTConfig) (*JWTService, error) {
 	if config.Secret == "" {
 		return nil, ErrMissingSecret
+	}
+
+	if len(config.Secret) < minSecretLength {
+		return nil, ErrSecretTooShort
 	}
 
 	if config.AccessTokenDuration == 0 {

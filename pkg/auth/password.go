@@ -77,7 +77,7 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 		params.iterations,
 		params.memory,
 		params.parallelism,
-		uint32(len(params.hash)),
+		argon2KeyLength,
 	)
 
 	return subtle.ConstantTimeCompare(params.hash, otherHash) == 1, nil

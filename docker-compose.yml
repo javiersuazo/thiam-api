@@ -45,6 +45,8 @@ x-backend-app-environment: &x-backend-app-environment
   OUTBOX_POLL_INTERVAL_MS: "1000"
   OUTBOX_BATCH_SIZE: "100"
   OUTBOX_MAX_RETRIES: "5"
+  # JWT
+  JWT_SECRET: "docker-compose-test-secret-key-32-characters-min"
 
 
 services:
