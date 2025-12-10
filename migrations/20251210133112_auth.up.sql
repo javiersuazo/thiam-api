@@ -20,9 +20,6 @@ CREATE TABLE IF NOT EXISTS users (
     phone_verified BOOLEAN NOT NULL DEFAULT FALSE,
     phone_verified_at TIMESTAMPTZ,
 
-    -- MFA
-    mfa_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-
     -- Account status
     status VARCHAR(50) NOT NULL DEFAULT 'pending_verification',
     failed_login_attempts INT NOT NULL DEFAULT 0,
