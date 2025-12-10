@@ -1,3 +1,4 @@
+// Package auth provides authentication utilities including password hashing and JWT token management.
 package auth
 
 import (
@@ -13,20 +14,25 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
+// Password hashing errors.
 var (
-	ErrInvalidHash         = errors.New("invalid password hash format")
+	// ErrInvalidHash is returned when the password hash format is invalid or malformed.
+	ErrInvalidHash = errors.New("invalid password hash format")
+	// ErrIncompatibleVersion is returned when the Argon2 version in the hash doesn't match the current version.
 	ErrIncompatibleVersion = errors.New("incompatible argon2 version")
 )
 
+// Argon2id parameters following OWASP recommendations.
 const (
-	argon2Memory      = 64 * 1024
-	argon2Iterations  = 3
-	argon2Parallelism = 2
-	argon2SaltLength  = 16
-	argon2KeyLength   = 32
-	argon2HashParts   = 6
+	argon2Memory            = 64 * 1024 // 64 MB
+	argon2Iterations        = 3
+	argon2Parallelism       = 2
+	argon2SaltLength        = 16
+	argon2KeyLength         = 32
+	argon2EncodedHashFields = 6 // Number of fields in PHC format: $algorithm$version$params$salt$hash
 )
 
+// hashParams holds the decoded parameters from a PHC-formatted Argon2id hash.
 type hashParams struct {
 	memory      uint32
 	iterations  uint32
@@ -35,6 +41,9 @@ type hashParams struct {
 	hash        []byte
 }
 
+// HashPassword generates an Argon2id hash of the given password.
+// It returns the encoded hash string in PHC format ($argon2id$v=...$m=...,t=...,p=...$salt$hash),
+// or an error if salt generation fails.
 func HashPassword(password string) (string, error) {
 	salt := make([]byte, argon2SaltLength)
 
@@ -65,6 +74,9 @@ func HashPassword(password string) (string, error) {
 	), nil
 }
 
+// VerifyPassword checks if the provided password matches the Argon2id encoded hash.
+// It returns true if the password is correct, false otherwise.
+// Returns an error if the hash format is invalid or incompatible.
 func VerifyPassword(password, encodedHash string) (bool, error) {
 	params, err := decodeHash(encodedHash)
 	if err != nil {
@@ -83,10 +95,11 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 	return subtle.ConstantTimeCompare(params.hash, otherHash) == 1, nil
 }
 
+// decodeHash parses a PHC-formatted Argon2id hash string and returns the parameters.
 func decodeHash(encodedHash string) (*hashParams, error) {
 	vals := strings.Split(encodedHash, "$")
 
-	if len(vals) != argon2HashParts {
+	if len(vals) != argon2EncodedHashFields {
 		return nil, ErrInvalidHash
 	}
 
@@ -121,6 +134,9 @@ func decodeHash(encodedHash string) (*hashParams, error) {
 	return params, nil
 }
 
+// HashToken generates a SHA-256 hash of the token for secure storage in the database.
+// The original token should never be stored directly; only this hash should be persisted.
+// This allows token verification without exposing the actual token value.
 func HashToken(token string) string {
 	hash := sha256.Sum256([]byte(token))
 

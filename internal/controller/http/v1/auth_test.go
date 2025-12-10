@@ -127,7 +127,7 @@ func TestAuthRoutes_Register(t *testing.T) {
 	}{
 		{
 			name:       "success with name",
-			body:       `{"email":"test@example.com","password":"password123","name":"John Doe"}`,
+			body:       `{"email":"test@example.com","password":"Password123!","name":"John Doe"}`,
 			userRepo:   &testUserRepo{},
 			wantStatus: http.StatusCreated,
 			check: func(t *testing.T, response map[string]interface{}) {
@@ -144,7 +144,7 @@ func TestAuthRoutes_Register(t *testing.T) {
 		},
 		{
 			name:       "success without name",
-			body:       `{"email":"test@example.com","password":"password123"}`,
+			body:       `{"email":"test@example.com","password":"Password123!"}`,
 			userRepo:   &testUserRepo{},
 			wantStatus: http.StatusCreated,
 			check: func(t *testing.T, response map[string]interface{}) {
@@ -166,7 +166,7 @@ func TestAuthRoutes_Register(t *testing.T) {
 		},
 		{
 			name:       "email already exists",
-			body:       `{"email":"existing@example.com","password":"password123"}`,
+			body:       `{"email":"existing@example.com","password":"Password123!"}`,
 			userRepo:   &testUserRepo{exists: true},
 			wantStatus: http.StatusConflict,
 			check: func(t *testing.T, response map[string]interface{}) {
@@ -176,19 +176,25 @@ func TestAuthRoutes_Register(t *testing.T) {
 		},
 		{
 			name:       "invalid email format",
-			body:       `{"email":"invalidemail","password":"password123"}`,
+			body:       `{"email":"invalidemail","password":"Password123!"}`,
 			userRepo:   &testUserRepo{},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "password too short",
-			body:       `{"email":"test@example.com","password":"short"}`,
+			body:       `{"email":"test@example.com","password":"Sh0rt!"}`,
+			userRepo:   &testUserRepo{},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "password too weak",
+			body:       `{"email":"test@example.com","password":"password123"}`,
 			userRepo:   &testUserRepo{},
 			wantStatus: http.StatusBadRequest,
 		},
 		{
 			name:       "internal server error",
-			body:       `{"email":"test@example.com","password":"password123"}`,
+			body:       `{"email":"test@example.com","password":"Password123!"}`,
 			userRepo:   &testUserRepo{existsErr: errDatabase},
 			wantStatus: http.StatusInternalServerError,
 		},

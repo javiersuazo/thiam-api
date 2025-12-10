@@ -16,12 +16,17 @@ import (
 	"github.com/gofiber/swagger"
 )
 
+// AuthUseCases groups all authentication-related use cases.
+type AuthUseCases struct {
+	Register *authuc.RegisterUseCase
+}
+
 // RouterDeps holds dependencies for the HTTP router.
 type RouterDeps struct {
-	Config     *config.Config
-	Postgres   *postgres.Postgres
-	Logger     logger.Interface
-	RegisterUC *authuc.RegisterUseCase
+	Config   *config.Config
+	Postgres *postgres.Postgres
+	Logger   logger.Interface
+	Auth     *AuthUseCases
 }
 
 // NewRouter -.
@@ -54,5 +59,5 @@ func NewRouter(app *fiber.App, deps *RouterDeps) {
 
 	// Routers
 	v1Group := app.Group("/v1")
-	v1.NewAuthRoutes(v1Group, deps.RegisterUC)
+	v1.NewAuthRoutes(v1Group, deps.Auth.Register)
 }

@@ -9,19 +9,30 @@ import (
 	"github.com/google/uuid"
 )
 
+// JWT validation and generation errors.
 var (
-	ErrInvalidToken      = errors.New("invalid token")
-	ErrExpiredToken      = errors.New("token has expired")
-	ErrInvalidClaims     = errors.New("invalid token claims")
-	ErrMissingSecret     = errors.New("jwt secret is required")
-	ErrSecretTooShort    = errors.New("jwt secret must be at least 32 characters for HS256")
+	// ErrInvalidToken is returned when the token cannot be parsed or is malformed.
+	ErrInvalidToken = errors.New("invalid token")
+	// ErrExpiredToken is returned when the token has passed its expiration time.
+	ErrExpiredToken = errors.New("token has expired")
+	// ErrInvalidClaims is returned when the token claims cannot be extracted or are invalid.
+	ErrInvalidClaims = errors.New("invalid token claims")
+	// ErrMissingSecret is returned when no JWT secret is provided to the service.
+	ErrMissingSecret = errors.New("jwt secret is required")
+	// ErrSecretTooShort is returned when the JWT secret is less than 32 characters.
+	ErrSecretTooShort = errors.New("jwt secret must be at least 32 characters for HS256")
+	// ErrUnexpectedSigning is returned when the token uses a signing method other than HMAC.
 	ErrUnexpectedSigning = errors.New("unexpected signing method")
 )
 
+// TokenType represents the type of JWT token (access or refresh).
 type TokenType string
 
+// Token type constants.
 const (
-	TokenTypeAccess  TokenType = "access"
+	// TokenTypeAccess identifies short-lived tokens used for API authentication.
+	TokenTypeAccess TokenType = "access"
+	// TokenTypeRefresh identifies long-lived tokens used to obtain new access tokens.
 	TokenTypeRefresh TokenType = "refresh"
 )
 
@@ -32,6 +43,7 @@ const (
 	minSecretLength        = 32
 )
 
+// Claims represents the custom JWT claims including user information and token type.
 type Claims struct {
 	jwt.RegisteredClaims
 	UserID    uuid.UUID `json:"user_id"`
@@ -39,6 +51,7 @@ type Claims struct {
 	TokenType TokenType `json:"token_type"`
 }
 
+// TokenPair contains the access and refresh tokens returned after authentication.
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -46,6 +59,7 @@ type TokenPair struct {
 	TokenType    string `json:"token_type"`
 }
 
+// JWTConfig holds the configuration for the JWT service.
 type JWTConfig struct {
 	Secret               string
 	AccessTokenDuration  time.Duration
@@ -53,10 +67,15 @@ type JWTConfig struct {
 	Issuer               string
 }
 
+// JWTService handles JWT token generation and validation using HS256 signing.
 type JWTService struct {
 	config JWTConfig
 }
 
+// NewJWTService creates a new JWT service with the provided configuration.
+// Returns ErrMissingSecret if no secret is provided, or ErrSecretTooShort if the secret
+// is less than 32 characters. Default durations are 15 minutes for access tokens
+// and 7 days for refresh tokens.
 func NewJWTService(config JWTConfig) (*JWTService, error) {
 	if config.Secret == "" {
 		return nil, ErrMissingSecret
@@ -81,6 +100,8 @@ func NewJWTService(config JWTConfig) (*JWTService, error) {
 	return &JWTService{config: config}, nil
 }
 
+// GenerateTokenPair creates a new access and refresh token pair for the given user.
+// Returns the token pair, the refresh token expiration time, and any error encountered.
 func (s *JWTService) GenerateTokenPair(userID uuid.UUID, email string) (*TokenPair, time.Time, error) {
 	accessToken, err := s.generateToken(userID, email, TokenTypeAccess, s.config.AccessTokenDuration)
 	if err != nil {
@@ -130,6 +151,7 @@ func (s *JWTService) generateToken(userID uuid.UUID, email string, tokenType Tok
 	return tokenString, nil
 }
 
+// ValidateToken parses and validates a JWT token string, returning the claims if valid.
 func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, s.keyFunc)
 	if err != nil {
@@ -148,6 +170,7 @@ func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
+// ValidateAccessToken validates a token and ensures it is an access token.
 func (s *JWTService) ValidateAccessToken(tokenString string) (*Claims, error) {
 	claims, err := s.ValidateToken(tokenString)
 	if err != nil {
@@ -161,6 +184,7 @@ func (s *JWTService) ValidateAccessToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
+// ValidateRefreshToken validates a token and ensures it is a refresh token.
 func (s *JWTService) ValidateRefreshToken(tokenString string) (*Claims, error) {
 	claims, err := s.ValidateToken(tokenString)
 	if err != nil {
@@ -182,6 +206,7 @@ func (s *JWTService) keyFunc(token *jwt.Token) (interface{}, error) {
 	return []byte(s.config.Secret), nil
 }
 
+// GetRefreshTokenDuration returns the configured refresh token duration.
 func (s *JWTService) GetRefreshTokenDuration() time.Duration {
 	return s.config.RefreshTokenDuration
 }

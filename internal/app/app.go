@@ -100,10 +100,12 @@ func Run(cfg *config.Config) { //nolint: funlen,gocritic,nolintlint,gocognit,goc
 	// HTTP Server
 	httpServer := httpserver.New(l, httpserver.Port(cfg.HTTP.Port), httpserver.Prefork(cfg.HTTP.UsePreforkMode))
 	http.NewRouter(httpServer.App, &http.RouterDeps{
-		Config:     cfg,
-		Postgres:   pg,
-		Logger:     l,
-		RegisterUC: registerUC,
+		Config:   cfg,
+		Postgres: pg,
+		Logger:   l,
+		Auth: &http.AuthUseCases{
+			Register: registerUC,
+		},
 	})
 
 	// Start servers

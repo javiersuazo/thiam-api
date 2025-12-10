@@ -84,6 +84,8 @@ func (r *authRoutes) handleRegisterError(c *fiber.Ctx, err error) error {
 		return ErrorResponse(c, apperror.Validation("Invalid email format"))
 	case errors.Is(err, authuc.ErrPasswordTooShort):
 		return ErrorResponse(c, apperror.Validation("Password must be at least 8 characters"))
+	case errors.Is(err, authuc.ErrPasswordTooWeak):
+		return ErrorResponse(c, apperror.Validation("Password must contain uppercase, lowercase, digit, and special character"))
 	default:
 		return ErrorResponse(c, apperror.Internal("An unexpected error occurred"))
 	}

@@ -143,7 +143,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "success with email and password",
 			input: authuc.RegisterInput{
 				Email:    "test@example.com",
-				Password: "password123",
+				Password: "Password123!",
 			},
 			userRepo:         &mockUserRepo{},
 			refreshTokenRepo: &mockRefreshTokenRepo{},
@@ -166,7 +166,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "success with name",
 			input: authuc.RegisterInput{
 				Email:    "test@example.com",
-				Password: "password123",
+				Password: "Password123!",
 				Name:     "John Doe",
 			},
 			userRepo:         &mockUserRepo{},
@@ -184,7 +184,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "email normalization - uppercase",
 			input: authuc.RegisterInput{
 				Email:    "TEST@EXAMPLE.COM",
-				Password: "password123",
+				Password: "Password123!",
 			},
 			userRepo:         &mockUserRepo{},
 			refreshTokenRepo: &mockRefreshTokenRepo{},
@@ -198,7 +198,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "email normalization - trim spaces",
 			input: authuc.RegisterInput{
 				Email:    "  test@example.com  ",
-				Password: "password123",
+				Password: "Password123!",
 			},
 			userRepo:         &mockUserRepo{},
 			refreshTokenRepo: &mockRefreshTokenRepo{},
@@ -212,7 +212,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "invalid email - missing @",
 			input: authuc.RegisterInput{
 				Email:    "invalidemail",
-				Password: "password123",
+				Password: "Password123!",
 			},
 			userRepo:         &mockUserRepo{},
 			refreshTokenRepo: &mockRefreshTokenRepo{},
@@ -222,7 +222,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "password too short",
 			input: authuc.RegisterInput{
 				Email:    "test@example.com",
-				Password: "short",
+				Password: "Sh0rt!",
 			},
 			userRepo:         &mockUserRepo{},
 			refreshTokenRepo: &mockRefreshTokenRepo{},
@@ -232,7 +232,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "password exactly 8 characters - valid",
 			input: authuc.RegisterInput{
 				Email:    "test@example.com",
-				Password: "12345678",
+				Password: "Pass123!",
 			},
 			userRepo:         &mockUserRepo{},
 			refreshTokenRepo: &mockRefreshTokenRepo{},
@@ -243,10 +243,30 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			},
 		},
 		{
+			name: "password too weak - missing uppercase",
+			input: authuc.RegisterInput{
+				Email:    "test@example.com",
+				Password: "password123!",
+			},
+			userRepo:         &mockUserRepo{},
+			refreshTokenRepo: &mockRefreshTokenRepo{},
+			wantErr:          authuc.ErrPasswordTooWeak,
+		},
+		{
+			name: "password too weak - missing special char",
+			input: authuc.RegisterInput{
+				Email:    "test@example.com",
+				Password: "Password123",
+			},
+			userRepo:         &mockUserRepo{},
+			refreshTokenRepo: &mockRefreshTokenRepo{},
+			wantErr:          authuc.ErrPasswordTooWeak,
+		},
+		{
 			name: "email already exists",
 			input: authuc.RegisterInput{
 				Email:    "existing@example.com",
-				Password: "password123",
+				Password: "Password123!",
 			},
 			userRepo: &mockUserRepo{
 				existsByEmailFn: func(_ context.Context, _ string) (bool, error) {
@@ -260,7 +280,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "error checking email exists",
 			input: authuc.RegisterInput{
 				Email:    "test@example.com",
-				Password: "password123",
+				Password: "Password123!",
 			},
 			userRepo: &mockUserRepo{
 				existsByEmailFn: func(_ context.Context, _ string) (bool, error) {
@@ -274,7 +294,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "error creating user",
 			input: authuc.RegisterInput{
 				Email:    "test@example.com",
-				Password: "password123",
+				Password: "Password123!",
 			},
 			userRepo: &mockUserRepo{
 				createFunc: func(_ context.Context, _ *auth.User) error {
@@ -288,7 +308,7 @@ func TestRegisterUseCase_Execute(t *testing.T) {
 			name: "error creating refresh token",
 			input: authuc.RegisterInput{
 				Email:    "test@example.com",
-				Password: "password123",
+				Password: "Password123!",
 			},
 			userRepo: &mockUserRepo{},
 			refreshTokenRepo: &mockRefreshTokenRepo{
@@ -337,7 +357,7 @@ func TestRegisterUseCase_PasswordHashing(t *testing.T) {
 
 	input := authuc.RegisterInput{
 		Email:    "test@example.com",
-		Password: "mySecurePassword123",
+		Password: "MySecurePassword123!",
 	}
 
 	_, err := uc.Execute(context.Background(), input)
@@ -363,7 +383,7 @@ func TestRegisterUseCase_RefreshTokenCreation(t *testing.T) {
 
 	input := authuc.RegisterInput{
 		Email:    "test@example.com",
-		Password: "password123",
+		Password: "Password123!",
 	}
 
 	output, err := uc.Execute(context.Background(), input)
@@ -389,7 +409,7 @@ func TestRegisterUseCase_TokenValidation(t *testing.T) {
 
 	input := authuc.RegisterInput{
 		Email:    "test@example.com",
-		Password: "password123",
+		Password: "Password123!",
 	}
 
 	output, err := uc.Execute(context.Background(), input)
