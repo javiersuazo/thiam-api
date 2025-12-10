@@ -4,6 +4,7 @@ package repo
 import (
 	"context"
 
+	"github.com/evrone/go-clean-template/internal/entity/auth"
 	"github.com/evrone/go-clean-template/internal/entity/event"
 	"github.com/evrone/go-clean-template/internal/entity/notification"
 	"github.com/google/uuid"
@@ -48,5 +49,22 @@ type (
 	DeliveryLogRepo interface {
 		Store(ctx context.Context, log *notification.DeliveryLog) error
 		GetByNotificationID(ctx context.Context, notificationID uuid.UUID) ([]notification.DeliveryLog, error)
+	}
+
+	// UserRepo handles user persistence.
+	UserRepo interface {
+		Create(ctx context.Context, user *auth.User) error
+		GetByID(ctx context.Context, id uuid.UUID) (*auth.User, error)
+		GetByEmail(ctx context.Context, email string) (*auth.User, error)
+		Update(ctx context.Context, user *auth.User) error
+		ExistsByEmail(ctx context.Context, email string) (bool, error)
+	}
+
+	// RefreshTokenRepo handles refresh token persistence.
+	RefreshTokenRepo interface {
+		Create(ctx context.Context, token *auth.RefreshToken) error
+		GetByTokenHash(ctx context.Context, tokenHash string) (*auth.RefreshToken, error)
+		Revoke(ctx context.Context, id uuid.UUID) error
+		RevokeByFamilyID(ctx context.Context, familyID uuid.UUID) error
 	}
 )

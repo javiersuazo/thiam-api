@@ -15,6 +15,8 @@ import (
 	"github.com/evrone/go-clean-template/internal/controller/http"
 	natsrpc "github.com/evrone/go-clean-template/internal/controller/nats_rpc"
 	"github.com/evrone/go-clean-template/internal/repo/persistent"
+	authuc "github.com/evrone/go-clean-template/internal/usecase/auth"
+	"github.com/evrone/go-clean-template/pkg/auth"
 	"github.com/evrone/go-clean-template/pkg/eventbus"
 	"github.com/evrone/go-clean-template/pkg/grpcserver"
 	"github.com/evrone/go-clean-template/pkg/httpserver"
@@ -37,6 +39,19 @@ func Run(cfg *config.Config) { //nolint: funlen,gocritic,nolintlint,gocognit,goc
 
 	// Repositories
 	outboxRepo := persistent.NewOutboxRepo(pg)
+	userRepo := persistent.NewUserRepo(pg)
+	refreshTokenRepo := persistent.NewRefreshTokenRepo(pg)
+
+	// JWT Service
+	jwtService, err := auth.NewJWTService(auth.JWTConfig{
+		Secret: cfg.JWT.Secret,
+	})
+	if err != nil {
+		l.Fatal(fmt.Errorf("app - Run - auth.NewJWTService: %w", err))
+	}
+
+	// Auth Use Cases
+	registerUC := authuc.NewRegisterUseCase(userRepo, refreshTokenRepo, jwtService)
 
 	// Outbox Worker
 	var (
@@ -84,7 +99,12 @@ func Run(cfg *config.Config) { //nolint: funlen,gocritic,nolintlint,gocognit,goc
 
 	// HTTP Server
 	httpServer := httpserver.New(l, httpserver.Port(cfg.HTTP.Port), httpserver.Prefork(cfg.HTTP.UsePreforkMode))
-	http.NewRouter(httpServer.App, cfg, pg, l)
+	http.NewRouter(httpServer.App, &http.RouterDeps{
+		Config:     cfg,
+		Postgres:   pg,
+		Logger:     l,
+		RegisterUC: registerUC,
+	})
 
 	// Start servers
 	rmqServer.Start()
