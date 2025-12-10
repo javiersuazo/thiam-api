@@ -16,4 +16,5 @@ DROP TABLE IF EXISTS mfa_totp;
 DROP TABLE IF EXISTS password_resets;
 DROP TABLE IF EXISTS email_verifications;
 DROP TABLE IF EXISTS refresh_tokens;
+DROP TABLE IF EXISTS jwt_signing_keys;
 DROP TABLE IF EXISTS users;

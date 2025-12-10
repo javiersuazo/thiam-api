@@ -43,12 +43,38 @@ CREATE INDEX idx_users_status ON users(status) WHERE status != 'deleted';
 CREATE INDEX idx_users_phone ON users(phone_number) WHERE phone_number IS NOT NULL;
 
 -- =============================================================================
+-- JWT_SIGNING_KEYS - Key rotation for JWT signing
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS jwt_signing_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kid VARCHAR(50) NOT NULL,
+
+    algorithm VARCHAR(10) NOT NULL DEFAULT 'HS256',
+    secret_encrypted TEXT NOT NULL,
+
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    expires_at TIMESTAMPTZ,
+    revoked_at TIMESTAMPTZ,
+
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT jwt_signing_keys_kid_unique UNIQUE (kid),
+    CONSTRAINT jwt_signing_keys_algorithm_check CHECK (algorithm IN ('HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512'))
+);
+
+CREATE INDEX idx_jwt_signing_keys_active ON jwt_signing_keys(is_active) WHERE is_active = TRUE AND revoked_at IS NULL;
+
+-- =============================================================================
 -- REFRESH_TOKENS - JWT refresh token storage
 -- =============================================================================
 CREATE TABLE IF NOT EXISTS refresh_tokens (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     token_hash VARCHAR(64) NOT NULL,
+
+    -- Token family for rotation tracking (detect reuse attacks)
+    family_id UUID NOT NULL DEFAULT gen_random_uuid(),
+    generation INT NOT NULL DEFAULT 1,
 
     -- Device/session info
     device_info VARCHAR(255),
@@ -68,6 +94,7 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 CREATE INDEX idx_refresh_tokens_user_id ON refresh_tokens(user_id);
 CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
 CREATE INDEX idx_refresh_tokens_expires ON refresh_tokens(expires_at) WHERE revoked_at IS NULL;
+CREATE INDEX idx_refresh_tokens_family ON refresh_tokens(family_id);
 
 -- =============================================================================
 -- EMAIL_VERIFICATIONS - Email verification tokens
