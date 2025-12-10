@@ -9,11 +9,20 @@ import (
 	_ "github.com/evrone/go-clean-template/docs" // Swagger docs.
 	"github.com/evrone/go-clean-template/internal/controller/http/middleware"
 	v1 "github.com/evrone/go-clean-template/internal/controller/http/v1"
+	"github.com/evrone/go-clean-template/internal/usecase"
 	"github.com/evrone/go-clean-template/pkg/logger"
 	"github.com/evrone/go-clean-template/pkg/postgres"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/swagger"
 )
+
+// RouterDeps contains dependencies for the HTTP router.
+type RouterDeps struct {
+	Config   *config.Config
+	Postgres *postgres.Postgres
+	Logger   logger.Interface
+	AuthUC   usecase.AuthUseCase
+}
 
 // NewRouter -.
 // Swagger spec:
@@ -22,27 +31,28 @@ import (
 // @version     1.0
 // @host        localhost:8080
 // @BasePath    /v1
-func NewRouter(app *fiber.App, cfg *config.Config, pg *postgres.Postgres, l logger.Interface) {
+func NewRouter(app *fiber.App, deps *RouterDeps) {
 	app.Use(middleware.RequestID())
-	app.Use(middleware.Logger(l))
-	app.Use(middleware.Recovery(l))
+	app.Use(middleware.Logger(deps.Logger))
+	app.Use(middleware.Recovery(deps.Logger))
 
 	// Prometheus metrics
-	if cfg.Metrics.Enabled {
+	if deps.Config.Metrics.Enabled {
 		prometheus := fiberprometheus.New("my-service-name")
 		prometheus.RegisterAt(app, "/metrics")
 		app.Use(prometheus.Middleware)
 	}
 
 	// Swagger
-	if cfg.Swagger.Enabled {
+	if deps.Config.Swagger.Enabled {
 		app.Get("/swagger/*", swagger.HandlerDefault)
 	}
 
 	// K8s probes
 	app.Get("/healthz", func(ctx *fiber.Ctx) error { return ctx.SendStatus(http.StatusOK) })
-	v1.NewHealthRoutes(app, pg.Pool)
+	v1.NewHealthRoutes(app, deps.Postgres.Pool)
 
 	// Routers
-	_ = app.Group("/v1")
+	v1Group := app.Group("/v1")
+	v1.NewAuthRoutes(v1Group, deps.AuthUC)
 }
